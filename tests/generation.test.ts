@@ -1,5 +1,5 @@
 import { InstanceStatus, Role } from "@prisma/client";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   createTemplate,
   databaseAvailable,

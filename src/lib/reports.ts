@@ -110,9 +110,6 @@ export type OrgReport = {
   categories: CategoryRow[];
 };
 
-const PRESET_DAYS = [7, 30, 90] as const;
-export type PresetDays = (typeof PRESET_DAYS)[number];
-
 /**
  * Build the window. The default is a rolling 30 days ending today; a custom
  * range is honoured but still clipped to today at the far end.
