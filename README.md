@@ -41,8 +41,9 @@ npm run typecheck
 ```
 
 The recurrence and timezone suites are pure and run anywhere. The rest need a
-throwaway database — set `TEST_DATABASE_URL` (or put it in `.env.test`) and they
-run; leave it unset and they skip rather than fail.
+throwaway database — `cp .env.test.example .env.test` and point it at one, or
+export `TEST_DATABASE_URL`. Leave it unset and those suites skip rather than
+fail.
 
 > The integration suites truncate every table between tests. Never point
 > `TEST_DATABASE_URL` at a database with real data.
