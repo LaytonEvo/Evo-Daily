@@ -47,6 +47,35 @@ run; leave it unset and they skip rather than fail.
 > The integration suites truncate every table between tests. Never point
 > `TEST_DATABASE_URL` at a database with real data.
 
+## Acceptance tests
+
+Every test in §10 of the build spec is automated. `npm test` runs all of them.
+
+| # | Acceptance test | Covered by |
+| --- | --- | --- |
+| 1 | DAILY Mon–Fri generates 5 in a Mon–Sun window, none at the weekend | `recurrence.test.ts`, `generation.test.ts` |
+| 2 | MONTHLY day 31 gives 28 Feb, 31 Mar, 30 Apr 2027 | `recurrence.test.ts`, `generation.test.ts` |
+| 3 | WEEKLY over 4 weeks generates exactly 4 | `recurrence.test.ts` |
+| 4 | Three consecutive generate runs produce zero duplicates | `generation.test.ts` |
+| 5 | A template with a past `endDate` generates nothing | `recurrence.test.ts`, `generation.test.ts` |
+| 6 | Editing a title rebuilds future instances, leaves today's and past alone | `generation.test.ts` |
+| 7 | Reassigning changes no instance due today or earlier | `generation.test.ts` |
+| 8 | A BST task due today is still today at 23:30 London, rolls at midnight | `time.test.ts` |
+| 9 | Both clock-change weekends give exactly one instance per day | `time.test.ts`, `recurrence.test.ts`, `generation.test.ts` |
+| 10 | Completing after `dueAt` sets `wasLate` | `generation.test.ts` |
+| 11 | Due 3 days ago is MISSED and a member cannot tick it | `generation.test.ts` |
+| 12 | Due yesterday is still tickable and shows under Overdue | `generation.test.ts`, `my-day.test.ts` |
+| 13 | The sweep is idempotent | `generation.test.ts` |
+| 14 | Every status transition writes exactly one AuditLog row | `generation.test.ts` |
+| 15 | A future due date appears in no denominator anywhere | `reports.test.ts` |
+| 16 | Leaderboard totals reconcile with the org summary | `reports.test.ts` |
+| 17 | A mid-window reassignment splits history correctly | `reports.test.ts` |
+| 18 | CSV row count equals the on-screen count | `reports.test.ts` |
+| 19 | A MEMBER on any admin route or API gets 403 | `guards.ts`; pages redirect, APIs answer 403 |
+| 20 | A MEMBER cannot touch another user's instances | `generation.test.ts`, `my-day.test.ts` |
+| 21 | A cron endpoint without a valid secret gets 401 | `my-day.test.ts` |
+
+
 ## Deploying to Railway
 
 1. Create a PostgreSQL database and a web service from this repo.

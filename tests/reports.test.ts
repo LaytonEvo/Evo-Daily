@@ -126,6 +126,7 @@ describeDb("org report", () => {
     expect(report.trend.every((point) => point.date <= TODAY)).toBe(true);
     expect(report.categories[0].assigned).toBe(21);
     expect(report.problemTasks[0].assigned).toBe(21);
+    expect(report.problemTasks[0].assigned).toBeLessThan(all.length);
   });
 
   it("keeps the leaderboard consistent with the org summary (acceptance test 16)", async () => {
@@ -269,10 +270,12 @@ describeDb("org report", () => {
 
     expect(report.problemTasks[0].templateId).toBe(bad.id);
     expect(report.problemTasks[0].completionRate).toBe(0);
-    expect(report.problemTasks.map((t) => t.templateId)).toContain(good.id);
+    // A task everyone completes is not a problem, so it is not listed.
+    expect(report.problemTasks.map((t) => t.templateId)).not.toContain(good.id);
     // One instance in the window is below the threshold, so it is not ranked.
     expect(report.problemTasks.map((t) => t.templateId)).not.toContain(rare.id);
     expect(report.problemTasks.every((t) => t.assigned >= PROBLEM_TASK_MIN_INSTANCES)).toBe(true);
+    expect(report.problemTasks.every((t) => (t.completionRate ?? 1) < 1)).toBe(true);
   });
 
   it("builds a trend point for every day in the window, with a 7-day average", async () => {

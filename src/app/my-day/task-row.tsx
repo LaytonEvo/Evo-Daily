@@ -65,7 +65,7 @@ export function TaskRow({
           <div className="min-w-0 flex-1">
             <p
               className={cn(
-                "truncate text-[15px] font-medium leading-snug",
+                "line-clamp-2 text-[15px] font-medium leading-snug",
                 done && "text-muted-foreground line-through",
               )}
             >

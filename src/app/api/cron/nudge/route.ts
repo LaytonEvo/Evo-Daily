@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { assertCronSecret, ApiError, errorResponse } from "@/lib/guards";
+import { ApiError, errorResponse } from "@/lib/guards";
+import { assertCronSecret } from "@/lib/cron-auth";
 import {
   afternoonNudge,
   managerDigest,

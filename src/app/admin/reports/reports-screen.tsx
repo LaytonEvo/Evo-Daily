@@ -275,7 +275,9 @@ function Leaderboard({ rows, query }: { rows: LeaderboardRow[]; query: string })
 }
 
 function ProblemTasks({ report, query }: { report: OrgReport; query: string }) {
-  const worst = report.problemTasks.slice(0, 10);
+  // No slice: the panel shows every row its CSV exports, so the two can never
+  // disagree on a count.
+  const worst = report.problemTasks;
 
   return (
     <Card>
@@ -341,7 +343,8 @@ function ProblemTasks({ report, query }: { report: OrgReport; query: string }) {
               {worst.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-3 py-10 text-center text-muted-foreground">
-                    No task has 5 or more instances in this window yet.
+                    Nothing to flag — every task with 5 or more instances in this window was
+                    completed.
                   </td>
                 </tr>
               ) : null}

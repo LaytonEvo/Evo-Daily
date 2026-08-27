@@ -75,45 +75,31 @@ export function toActor(user: SessionUser): Actor {
   return { id: user.id, role: user.role, organisationId: user.organisationId };
 }
 
-/** Turn a thrown ApiError/TransitionError into its JSON response. */
+/**
+ * Turn a thrown error into its JSON response.
+ *
+ * Duck-typed on `status` rather than on a class, so every error carrying an
+ * intended HTTP status — ApiError, TransitionError, CronAuthError — maps to it,
+ * including across module boundaries where `instanceof` cannot be relied on.
+ */
 export function errorResponse(error: unknown): NextResponse {
-  if (error instanceof ApiError) {
-    return NextResponse.json({ error: error.message }, { status: error.status });
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "name" in error &&
-    (error as { name: string }).name === "TransitionError"
-  ) {
-    const e = error as unknown as { message: string; status?: number };
-    return NextResponse.json({ error: e.message }, { status: e.status ?? 400 });
-  }
   if (error instanceof Error && error.name === "ZodError") {
     return NextResponse.json({ error: "Invalid request" }, { status: 422 });
   }
+
+  const status = statusOf(error);
+  if (status !== null) {
+    return NextResponse.json({ error: (error as Error).message }, { status });
+  }
+
   console.error("Unhandled API error", error);
   return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
 }
 
-/**
- * Guard for the cron endpoints. A request without a matching secret is
- * rejected outright — these endpoints mutate everyone's data.
- */
-export function assertCronSecret(request: Request): void {
-  const expected = process.env.CRON_SECRET;
-  if (!expected) {
-    throw new ApiError("Cron is not configured", 500);
-  }
-  const provided = request.headers.get("x-cron-secret");
-  if (!provided || !timingSafeEqual(provided, expected)) {
-    throw new ApiError("Unauthorised", 401);
-  }
-}
-
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
+/** A caller-intended HTTP status, if the error carries a sensible one. */
+function statusOf(error: unknown): number | null {
+  if (!(error instanceof Error)) return null;
+  const status = (error as Error & { status?: unknown }).status;
+  if (typeof status !== "number" || status < 400 || status > 599) return null;
+  return status;
 }

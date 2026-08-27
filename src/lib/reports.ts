@@ -315,6 +315,9 @@ export async function buildOrgReport(
   const templateById = new Map(templates.map((t) => [t.id, t]));
   const problemTasks: ProblemTask[] = [...byTemplate.entries()]
     .filter(([, rows]) => rows.length >= PROBLEM_TASK_MIN_INSTANCES)
+    // A task at 100% is not a problem. Listing it under this heading buries
+    // the ones that are.
+    .filter(([, rows]) => totalsOf(rows).completed < rows.length)
     .map(([templateId, rows]) => {
       const template = templateById.get(templateId);
       return {
