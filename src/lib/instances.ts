@@ -17,6 +17,23 @@ import { getSettings } from "./settings";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
+/**
+ * Run the status update and its audit row together.
+ *
+ * When handed a full client this opens a transaction, so a status change can
+ * never land without its AuditLog row. When already inside one — the caller
+ * passed a TransactionClient — the writes simply join it.
+ */
+async function atomically<T>(
+  db: DbClient,
+  work: (tx: DbClient) => Promise<T>,
+): Promise<T> {
+  if ("$transaction" in db && typeof db.$transaction === "function") {
+    return (db as PrismaClient).$transaction((tx) => work(tx));
+  }
+  return work(db);
+}
+
 export class TransitionError extends Error {
   constructor(
     message: string,
@@ -107,8 +124,8 @@ export async function completeInstance(
   // still counts as completed, but it is permanently recorded as late.
   const wasLate = instance.dueAt ? now.getTime() > instance.dueAt.getTime() : false;
 
-  const [updated] = await db.$transaction([
-    db.taskInstance.update({
+  return atomically(db, async (tx) => {
+    const updated = await tx.taskInstance.update({
       where: { id: instance.id },
       data: {
         status: InstanceStatus.COMPLETED,
@@ -117,8 +134,8 @@ export async function completeInstance(
         wasLate,
         ...(options.note !== undefined ? { note: options.note } : {}),
       },
-    }),
-    db.auditLog.create({
+    });
+    await tx.auditLog.create({
       data: {
         organisationId: instance.organisationId,
         instanceId: instance.id,
@@ -127,10 +144,9 @@ export async function completeInstance(
         toStatus: InstanceStatus.COMPLETED,
         source: "USER",
       },
-    }),
-  ]);
-
-  return updated;
+    });
+    return updated;
+  });
 }
 
 export async function uncompleteInstance(
@@ -152,8 +168,8 @@ export async function uncompleteInstance(
     );
   }
 
-  const [updated] = await db.$transaction([
-    db.taskInstance.update({
+  return atomically(db, async (tx) => {
+    const updated = await tx.taskInstance.update({
       where: { id: instance.id },
       data: {
         status: InstanceStatus.PENDING,
@@ -161,8 +177,8 @@ export async function uncompleteInstance(
         completedById: null,
         wasLate: false,
       },
-    }),
-    db.auditLog.create({
+    });
+    await tx.auditLog.create({
       data: {
         organisationId: instance.organisationId,
         instanceId: instance.id,
@@ -171,10 +187,9 @@ export async function uncompleteInstance(
         toStatus: InstanceStatus.PENDING,
         source: "USER",
       },
-    }),
-  ]);
-
-  return updated;
+    });
+    return updated;
+  });
 }
 
 /** Set or clear the free-text note on an instance without changing its status. */
