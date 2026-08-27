@@ -1,0 +1,181 @@
+// EvoTasks — recurring operational accountability for Evolution Golf.
+//
+// Multi-tenancy note: every table carries organisationId from day one, but v1
+// ships with a single seeded organisation and no org-switching UI. This is a
+// deliberate cheap hedge against pointing the same tool at another business.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organisation {
+  id        String   @id @default(cuid())
+  name      String
+  timezone  String   @default("Europe/London")
+  createdAt DateTime @default(now())
+
+  users      User[]
+  categories Category[]
+  templates  TaskTemplate[]
+  instances  TaskInstance[]
+  settings   Settings?
+}
+
+model User {
+  id                 String   @id @default(cuid())
+  organisationId     String
+  email              String   @unique
+  name               String
+  passwordHash       String
+  role               Role     @default(MEMBER)
+  isActive           Boolean  @default(true)
+  mustChangePassword Boolean  @default(true)
+  slackUserId        String? // optional, for Phase 3 nudges
+  managerId          String? // optional, for Phase 3 miss alerts
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  organisation       Organisation   @relation(fields: [organisationId], references: [id])
+  manager            User?          @relation("ManagerReports", fields: [managerId], references: [id])
+  reports            User[]         @relation("ManagerReports")
+  assignedTemplates  TaskTemplate[] @relation("TemplateAssignee")
+  createdTemplates   TaskTemplate[] @relation("TemplateCreator")
+  assignedInstances  TaskInstance[] @relation("InstanceAssignee")
+  completedInstances TaskInstance[] @relation("InstanceCompleter")
+  auditLogs          AuditLog[]
+
+  @@index([organisationId, isActive])
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+model Category {
+  id             String @id @default(cuid())
+  organisationId String
+  name           String // e.g. "Customer Support", "Stock", "Marketing"
+  colour         String // hex
+  sortOrder      Int    @default(0)
+
+  organisation Organisation   @relation(fields: [organisationId], references: [id])
+  templates    TaskTemplate[]
+  instances    TaskInstance[]
+
+  @@unique([organisationId, name])
+  @@index([organisationId, sortOrder])
+}
+
+model TaskTemplate {
+  id             String    @id @default(cuid())
+  organisationId String
+  title          String
+  description    String? // short. plain text or basic markdown. not a wiki.
+  categoryId     String?
+  assigneeId     String // one assignee. no multi-assign in v1.
+  frequency      Frequency
+  daysOfWeek     Int[] // DAILY only. 1=Mon..7=Sun. default [1,2,3,4,5]
+  dayOfWeek      Int? // WEEKLY only. 1=Mon..7=Sun
+  dayOfMonth     Int? // MONTHLY only. 1..31, clamped to month length
+  dueTime        String? // optional "HH:mm" cut-off within the due date
+  startDate      DateTime  @db.Date
+  endDate        DateTime? @db.Date
+  isActive       Boolean   @default(true)
+  createdById    String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organisation Organisation   @relation(fields: [organisationId], references: [id])
+  category     Category?      @relation(fields: [categoryId], references: [id])
+  assignee     User           @relation("TemplateAssignee", fields: [assigneeId], references: [id])
+  createdBy    User           @relation("TemplateCreator", fields: [createdById], references: [id])
+  instances    TaskInstance[]
+
+  @@index([organisationId, isActive])
+  @@index([assigneeId])
+}
+
+enum Frequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  ONE_OFF
+}
+
+model TaskInstance {
+  id             String    @id @default(cuid())
+  organisationId String
+  templateId     String
+  dueDate        DateTime  @db.Date
+  dueAt          DateTime? // computed from dueDate + template.dueTime, in London
+
+  // --- snapshot fields, frozen at generation time ---
+  title      String
+  assigneeId String
+  categoryId String?
+  // ---
+
+  status        InstanceStatus @default(PENDING)
+  completedAt   DateTime?
+  completedById String?
+  wasLate       Boolean        @default(false)
+  note          String? // optional free-text on completion
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  template     TaskTemplate @relation(fields: [templateId], references: [id])
+  assignee     User         @relation("InstanceAssignee", fields: [assigneeId], references: [id])
+  completedBy  User?        @relation("InstanceCompleter", fields: [completedById], references: [id])
+  category     Category?    @relation(fields: [categoryId], references: [id])
+  auditLogs    AuditLog[]
+
+  @@unique([templateId, dueDate]) // idempotency guarantee — critical
+  @@index([assigneeId, dueDate])
+  @@index([organisationId, dueDate, status])
+}
+
+enum InstanceStatus {
+  PENDING
+  COMPLETED
+  MISSED
+}
+
+// Every status change writes exactly one row here. The reporting is only
+// credible if it is auditable.
+model AuditLog {
+  id             String         @id @default(cuid())
+  organisationId String
+  instanceId     String
+  userId         String? // null for system transitions (the nightly sweep)
+  fromStatus     InstanceStatus
+  toStatus       InstanceStatus
+  source         AuditSource    @default(USER)
+  at             DateTime       @default(now())
+
+  instance TaskInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  user     User?        @relation(fields: [userId], references: [id])
+
+  @@index([instanceId, at])
+  @@index([organisationId, at])
+}
+
+enum AuditSource {
+  USER
+  SYSTEM
+}
+
+// Single row per organisation.
+model Settings {
+  organisationId        String @id
+  graceDays             Int    @default(2)
+  generationHorizonDays Int    @default(14)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+}
