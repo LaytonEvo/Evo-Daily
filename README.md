@@ -79,13 +79,47 @@ Every test in §10 of the build spec is automated. `npm test` runs all of them.
 
 ## Deploying to Railway
 
-1. Create a PostgreSQL database and a web service from this repo.
-2. Set the environment variables below on the web service.
-3. The start command runs `prisma migrate deploy` before booting, so migrations
-   apply on each deploy. `/api/health` is the health check.
-4. Add one cron service per schedule, all running `./cron.sh` with `JOB` set.
-   The schedules are listed at the top of that file. Set each cron service's
-   timezone to `Europe/London`.
+The production deployment lives in the **EvoTasks** project. It is four
+services in one environment:
+
+| Service | What it is |
+| --- | --- |
+| `evotasks-web` | The app. Built by nixpacks from this repo, `prisma migrate deploy` runs before it boots, health check on `/api/health` |
+| `Postgres` | `postgres:16` with a persistent volume at `/var/lib/postgresql/data` |
+| `cron-generate` | `curlimages/curl`, fires `POST /api/cron/generate` at 00:05 UTC |
+| `cron-sweep` | `curlimages/curl`, fires `POST /api/cron/sweep` at 00:15 UTC |
+
+The cron services are a curl image rather than this repo on purpose: a
+scheduled job should not have to build the whole application to make one
+authenticated request.
+
+### Setting it up from scratch
+
+1. Create a PostgreSQL service. Using the official image directly, give it a
+   volume at `/var/lib/postgresql/data` and set `POSTGRES_USER`,
+   `POSTGRES_PASSWORD`, `POSTGRES_DB`, and `PGDATA` to
+   `/var/lib/postgresql/data/pgdata` — a subdirectory, because the volume root
+   is not empty and `initdb` refuses to use it.
+2. Create the web service from this repo and set the variables below.
+   `DATABASE_URL` can reference the database as `${{Postgres.DATABASE_URL}}`.
+3. Generate a domain for the web service and set `NEXTAUTH_URL` to it.
+4. For each cron job, create a service from `curlimages/curl`, set `APP_URL`,
+   `CRON_SECRET` and `JOB`, and give it the schedule and start command from
+   `cron.sh`. Wrap the command in `sh -c '…'` — Railway execs an image's start
+   command without a shell, so `$APP_URL` will not otherwise expand.
+
+### On cron and the clocks
+
+Railway evaluates cron schedules in UTC and has no per-service timezone. The
+spec asks for 00:05 and 00:15 London, and a fixed UTC schedule satisfies it
+year-round: 00:05 UTC is 00:05 London in winter and 01:05 London in summer.
+Both are after London midnight, which is all the jobs need — they ask
+`lib/time.ts` what day it is and it answers in London. The summer hour of
+drift costs nothing, and `/my-day` generates the day's instances on load
+regardless.
+
+The Phase 3 nudges are the exception, because a person reads them at a
+particular time. See the note at the top of `cron.sh`.
 
 ### Environment variables
 
@@ -93,13 +127,22 @@ Every test in §10 of the build spec is automated. `npm test` runs all of them.
 | --- | --- | --- |
 | `DATABASE_URL` | yes | PostgreSQL connection string |
 | `NEXTAUTH_SECRET` | yes | Session signing key |
-| `NEXTAUTH_URL` | yes | Full public URL, e.g. `https://tasks.evolutiongolf.co.uk` |
+| `NEXTAUTH_URL` | yes | Full public URL |
 | `CRON_SECRET` | yes | Shared secret for the cron endpoints |
 | `APP_TIMEZONE` | yes | `Europe/London` |
+| `TZ` | no | `Europe/London`, so container logs read in local time |
 | `SLACK_BOT_TOKEN` | no | Phase 3. Without it the app runs unchanged and every nudge reports itself skipped |
 | `SLACK_MANAGER_CHANNEL_ID` | no | Phase 3, for the Monday digest |
+| `SEED_DEFAULT_PASSWORD` | no | Only read by the seed script |
 
-The cron services additionally need `APP_URL`, `CRON_SECRET` and `JOB`.
+The cron services need `APP_URL`, `CRON_SECRET` and `JOB` instead.
+
+### Seeding a deployed environment
+
+`npm run db:seed` **deletes every row** before it writes. To seed a Railway
+environment, set it as the web service's pre-deploy command, redeploy once,
+then clear it again — leaving it in place would wipe the database on every
+subsequent deploy.
 
 ---
 
