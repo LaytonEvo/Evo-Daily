@@ -15,7 +15,7 @@ import {
   sweepMissed,
 } from "@/lib/recurrence";
 import { completeInstance, uncompleteInstance } from "@/lib/instances";
-import { addDays, toDateOnly, toDbDate } from "@/lib/time";
+import { addDays, londonTimeOn, toDateOnly, toDbDate } from "@/lib/time";
 
 const available = await databaseAvailable();
 const describeDb = available ? describe : describe.skip;
@@ -24,8 +24,10 @@ if (!available) {
   console.warn("Skipping database tests — set TEST_DATABASE_URL to run them.");
 }
 
-// A fixed "today" so the suite reads the same in January as in July.
+// A fixed "today" so the suite reads the same in January as in July — and,
+// because the clock is passed in rather than read, the same next year.
 const TODAY = "2026-08-27"; // Thursday
+const NOON = londonTimeOn(TODAY, "12:00");
 
 describeDb("generateInstances", () => {
   let fixture: Fixture;
@@ -125,7 +127,7 @@ describeDb("generateInstances", () => {
       id: fixture.memberId,
       role: Role.MEMBER,
       organisationId: fixture.orgId,
-    });
+    }, { now: NOON });
 
     await generateInstances(prisma, "2026-08-27", "2026-08-27");
     const [after] = await instancesFor(template.id);
@@ -250,7 +252,7 @@ describeDb("editing a template", () => {
       id: fixture.adminId,
       role: Role.ADMIN,
       organisationId: fixture.orgId,
-    });
+    }, { now: NOON });
 
     await regenerateFutureInstances(prisma, template.id, TODAY, 5);
 
@@ -299,7 +301,7 @@ describeDb("the sweep", () => {
         id: fixture.memberId,
         role: Role.MEMBER,
         organisationId: fixture.orgId,
-      }),
+      }, { now: NOON }),
     ).rejects.toThrow(/grace period/i);
   });
 
@@ -319,7 +321,7 @@ describeDb("the sweep", () => {
       id: fixture.memberId,
       role: Role.MEMBER,
       organisationId: fixture.orgId,
-    });
+    }, { now: NOON });
     expect(completed.status).toBe(InstanceStatus.COMPLETED);
     // Completed after its cut-off, so the metric still records it as late.
     expect(completed.wasLate).toBe(true);
@@ -371,7 +373,7 @@ describeDb("the sweep", () => {
       id: fixture.adminId,
       role: Role.ADMIN,
       organisationId: fixture.orgId,
-    });
+    }, { now: NOON });
     await sweepMissed(prisma, TODAY, 2);
 
     const after = await prisma.taskInstance.findUniqueOrThrow({ where: { id: instance.id } });
@@ -428,9 +430,9 @@ describeDb("status transitions", () => {
   it("writes exactly one audit row per transition (acceptance test 14)", async () => {
     const instance = await makeInstance("2026-08-27");
 
-    await completeInstance(prisma, instance.id, member());
-    await uncompleteInstance(prisma, instance.id, member());
-    await completeInstance(prisma, instance.id, member());
+    await completeInstance(prisma, instance.id, member(), { now: NOON });
+    await uncompleteInstance(prisma, instance.id, member(), { now: NOON });
+    await completeInstance(prisma, instance.id, member(), { now: NOON });
 
     const audits = await prisma.auditLog.findMany({
       where: { instanceId: instance.id },
@@ -445,8 +447,8 @@ describeDb("status transitions", () => {
 
   it("is idempotent — a double tap does not write a second audit row", async () => {
     const instance = await makeInstance("2026-08-27");
-    await completeInstance(prisma, instance.id, member());
-    await completeInstance(prisma, instance.id, member());
+    await completeInstance(prisma, instance.id, member(), { now: NOON });
+    await completeInstance(prisma, instance.id, member(), { now: NOON });
     expect(await prisma.auditLog.count({ where: { instanceId: instance.id } })).toBe(1);
   });
 
@@ -454,6 +456,7 @@ describeDb("status transitions", () => {
     const instance = await makeInstance("2026-08-27");
     const completed = await completeInstance(prisma, instance.id, member(), {
       note: "Two enquiries passed to Luke",
+      now: NOON,
     });
     expect(completed.note).toBe("Two enquiries passed to Luke");
   });
@@ -462,7 +465,7 @@ describeDb("status transitions", () => {
     const instance = await makeInstance(addDays(TODAY, -5));
     await sweepMissed(prisma, TODAY, 2);
 
-    const completed = await completeInstance(prisma, instance.id, admin());
+    const completed = await completeInstance(prisma, instance.id, admin(), { now: NOON });
     expect(completed.status).toBe(InstanceStatus.COMPLETED);
 
     const audits = await prisma.auditLog.findMany({ where: { instanceId: instance.id } });
@@ -475,13 +478,13 @@ describeDb("status transitions", () => {
 
   it("stops a member unticking outside the grace window, but not an admin", async () => {
     const instance = await makeInstance(addDays(TODAY, -5));
-    await completeInstance(prisma, instance.id, admin());
+    await completeInstance(prisma, instance.id, admin(), { now: NOON });
 
-    await expect(uncompleteInstance(prisma, instance.id, member())).rejects.toThrow(
+    await expect(uncompleteInstance(prisma, instance.id, member(), { now: NOON })).rejects.toThrow(
       /grace period/i,
     );
 
-    const reverted = await uncompleteInstance(prisma, instance.id, admin());
+    const reverted = await uncompleteInstance(prisma, instance.id, admin(), { now: NOON });
     expect(reverted.status).toBe(InstanceStatus.PENDING);
   });
 
@@ -494,7 +497,7 @@ describeDb("status transitions", () => {
     await generateInstances(prisma, TODAY, TODAY);
     const [instance] = await instancesFor(template.id);
 
-    await expect(completeInstance(prisma, instance.id, member())).rejects.toThrow(
+    await expect(completeInstance(prisma, instance.id, member(), { now: NOON })).rejects.toThrow(
       /not found/i,
     );
   });

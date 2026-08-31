@@ -99,13 +99,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
 });
 
-export const PASSWORD_SALT_ROUNDS = 10;
-
-export function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, PASSWORD_SALT_ROUNDS);
-}
-
-export const MIN_PASSWORD_LENGTH = 10;
+// Re-exported so existing callers keep one import site for auth concerns.
+export { PASSWORD_SALT_ROUNDS, MIN_PASSWORD_LENGTH, hashPassword } from "./password";
 
 export function isAdmin(role: Role | undefined): boolean {
   return role === Role.ADMIN;

@@ -9,7 +9,10 @@ import { Role } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { redirect } from "next/navigation";
 import { auth } from "./auth";
+import { ApiError } from "./errors";
 import type { Actor } from "./instances";
+
+export { ApiError };
 
 export type SessionUser = {
   id: string;
@@ -45,16 +48,6 @@ export async function requireAdminPage(): Promise<SessionUser> {
   const user = await requireUser();
   if (user.role !== Role.ADMIN) redirect("/my-day?denied=admin");
   return user;
-}
-
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-  ) {
-    super(message);
-    this.name = "ApiError";
-  }
 }
 
 /** For API routes: 401 when signed out. */

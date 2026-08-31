@@ -5,12 +5,13 @@ import { generateInstances, sweepMissed } from "@/lib/recurrence";
 import { completeInstance, isOverdue, daysLate, isWithinGraceWindow } from "@/lib/instances";
 import { ensureInstancesForToday, getMyDay } from "@/lib/my-day";
 import { assertCronSecret } from "@/lib/cron-auth";
-import { addDays } from "@/lib/time";
+import { addDays, londonTimeOn } from "@/lib/time";
 
 const available = await databaseAvailable();
 const describeDb = available ? describe : describe.skip;
 
 const TODAY = "2026-08-27"; // Thursday
+const NOON = londonTimeOn(TODAY, "12:00");
 
 describe("derived display state", () => {
   it("treats a past-due PENDING instance as Overdue, and nothing else", () => {
@@ -160,7 +161,7 @@ describeDb("/my-day sections", () => {
     expect(before.owedTotal).toBe(1);
     expect(before.owedDone).toBe(0);
 
-    await completeInstance(prisma, before.dueToday[0].id, member());
+    await completeInstance(prisma, before.dueToday[0].id, member(), { now: NOON });
 
     const after = await getMyDay(prisma, { id: fixture.memberId, organisationId: fixture.orgId }, TODAY);
     expect(after.dueToday).toHaveLength(0);

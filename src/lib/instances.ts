@@ -102,6 +102,10 @@ export async function completeInstance(
 
   const isAdmin = actor.role === Role.ADMIN;
   const { graceDays } = await getSettings(db, actor.organisationId);
+  // One clock for the whole transition: a caller that supplies `now` must get
+  // the same day used for the grace window as for wasLate, or the two can
+  // disagree about what day it is.
+  const today = todayInLondon(now);
 
   if (instance.status === InstanceStatus.MISSED && !isAdmin) {
     throw new TransitionError(
@@ -112,7 +116,7 @@ export async function completeInstance(
   if (
     instance.status === InstanceStatus.PENDING &&
     !isAdmin &&
-    !isWithinGraceWindow(instance.dueDate, graceDays)
+    !isWithinGraceWindow(instance.dueDate, graceDays, today)
   ) {
     throw new TransitionError(
       "This task is past its grace period. Ask an admin to reopen it.",
@@ -153,6 +157,7 @@ export async function uncompleteInstance(
   db: DbClient,
   instanceId: string,
   actor: Actor,
+  options: { now?: Date } = {},
 ) {
   const instance = await loadInstanceFor(db, instanceId, actor);
 
@@ -160,8 +165,9 @@ export async function uncompleteInstance(
 
   const isAdmin = actor.role === Role.ADMIN;
   const { graceDays } = await getSettings(db, actor.organisationId);
+  const today = todayInLondon(options.now ?? new Date());
 
-  if (!isAdmin && !isWithinGraceWindow(instance.dueDate, graceDays)) {
+  if (!isAdmin && !isWithinGraceWindow(instance.dueDate, graceDays, today)) {
     throw new TransitionError(
       "This task is past its grace period and can no longer be changed.",
       403,

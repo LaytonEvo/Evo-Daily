@@ -4,8 +4,8 @@
 
 import { Role, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
-import { hashPassword, MIN_PASSWORD_LENGTH } from "./auth";
-import { ApiError } from "./guards";
+import { hashPassword, MIN_PASSWORD_LENGTH } from "./password";
+import { ApiError } from "./errors";
 
 export const createUserSchema = z.object({
   name: z.string().trim().min(1, "Give them a name").max(120),
@@ -26,6 +26,52 @@ export const updateUserSchema = z.object({
   password: z.string().min(MIN_PASSWORD_LENGTH).optional(),
 });
 
+/**
+ * Reject a reporting line that loops back on itself.
+ *
+ * Checking only for self-reference is not enough: A reporting to B and B
+ * reporting to A is just as circular, and any code that walks the chain — the
+ * miss alerts today, a manager team-view later — would spin on it forever.
+ *
+ * Walks up from the proposed manager. Reaching `userId` means the assignment
+ * would close a loop; reaching anyone already seen means the existing data
+ * holds one. Both are rejected, and the `seen` set guarantees the walk
+ * terminates however broken the stored chain is.
+ */
+async function assertNoManagerCycle(
+  db: PrismaClient,
+  organisationId: string,
+  userId: string,
+  managerId: string,
+): Promise<void> {
+  if (managerId === userId) {
+    throw new ApiError("Someone cannot be their own manager", 422);
+  }
+
+  const seen = new Set<string>([userId]);
+  let cursor: string | null = managerId;
+
+  while (cursor) {
+    if (seen.has(cursor)) {
+      throw new ApiError(
+        "That would put two people in each other's reporting line.",
+        422,
+      );
+    }
+    seen.add(cursor);
+
+    // Scoped to the organisation, so a manager from another one is rejected
+    // rather than silently ending the walk.
+    const next: { managerId: string | null } | null = await db.user.findFirst({
+      where: { id: cursor, organisationId },
+      select: { managerId: true },
+    });
+    if (!next) throw new ApiError("That person is not in this organisation", 422);
+
+    cursor = next.managerId;
+  }
+}
+
 export async function createUser(
   db: PrismaClient,
   organisationId: string,
@@ -33,6 +79,16 @@ export async function createUser(
 ) {
   const existing = await db.user.findUnique({ where: { email: input.email } });
   if (existing) throw new ApiError("Someone already uses that email", 409);
+
+  // Nobody reports to an account that does not exist yet, so a new user cannot
+  // close a loop — but their manager still has to be a real colleague.
+  if (input.managerId) {
+    const manager = await db.user.findFirst({
+      where: { id: input.managerId, organisationId },
+      select: { id: true },
+    });
+    if (!manager) throw new ApiError("That person is not in this organisation", 422);
+  }
 
   return db.user.create({
     data: {
@@ -69,8 +125,8 @@ export async function updateUser(
     }
   }
 
-  if (input.managerId && input.managerId === userId) {
-    throw new ApiError("Someone cannot be their own manager", 422);
+  if (input.managerId) {
+    await assertNoManagerCycle(db, organisationId, userId, input.managerId);
   }
 
   return db.user.update({

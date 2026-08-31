@@ -20,7 +20,7 @@ import {
 } from "./recurrence";
 import { getSettings } from "./settings";
 import { addDays, isTimeOfDay, toDbDate, todayInLondon, type DateOnly } from "./time";
-import { ApiError } from "./guards";
+import { ApiError } from "./errors";
 
 const dateOnly = z
   .string()
