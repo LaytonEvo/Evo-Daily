@@ -4,13 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Role } from "@prisma/client";
-import { Plus, X } from "lucide-react";
+import { Check, Copy, Plus, RefreshCw, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { CategoryEditor, type Category } from "./category-editor";
 import { cn } from "@/lib/utils";
+import { generatePassword } from "@/lib/generate-password";
 
 type Person = {
   id: string;
@@ -167,7 +168,8 @@ function PersonDrawer({
 }) {
   const [name, setName] = useState(person?.name ?? "");
   const [email, setEmail] = useState(person?.email ?? "");
-  const [password, setPassword] = useState("");
+  const [password, setPassword] = useState(() => (person ? "" : generatePassword()));
+  const [copied, setCopied] = useState(false);
   const [role, setRole] = useState<Role>(person?.role ?? Role.MEMBER);
   const [isActive, setIsActive] = useState(person?.isActive ?? true);
   const [slackUserId, setSlackUserId] = useState(person?.slackUserId ?? "");
@@ -274,17 +276,57 @@ function PersonDrawer({
                   <span className="ml-1 font-normal text-muted-foreground">optional</span>
                 ) : null}
               </label>
-              <Input
-                id="password"
-                type="text"
-                required={!person}
-                minLength={10}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 10 characters"
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="password"
+                  type="text"
+                  required={!person}
+                  minLength={10}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="At least 10 characters"
+                  className="font-mono"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  aria-label="Generate a password"
+                  title="Generate a password"
+                  onClick={() => {
+                    setPassword(generatePassword());
+                    setCopied(false);
+                  }}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  aria-label="Copy password"
+                  title="Copy password"
+                  disabled={!password}
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(password);
+                      setCopied(true);
+                    } catch {
+                      // Clipboard access can be refused; the field is plain
+                      // text and selectable, so there is always a way through.
+                      setCopied(false);
+                    }
+                  }}
+                >
+                  {copied ? (
+                    <Check className="h-4 w-4 text-success" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
               <p className="text-xs text-muted-foreground">
-                They will be forced to change it on their next sign-in.
+                {copied
+                  ? "Copied. Send it to them however you normally would."
+                  : "Send this to them — they will be forced to change it at first sign-in."}
               </p>
             </div>
 

@@ -23,9 +23,9 @@
  * first sign-in. The passwords are printed once, here, and never again.
  */
 
-import { randomInt } from "node:crypto";
 import { PrismaClient, Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { generatePassword } from "../src/lib/generate-password";
 
 const prisma = new PrismaClient();
 
@@ -43,16 +43,6 @@ const FALLBACK_COLOURS = [
 ];
 
 type Person = { name: string; email: string; role: Role };
-
-/** Unambiguous alphabet: no O/0, l/1/I — these get read aloud and typed by hand. */
-const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-
-function generatePassword(length = 14): string {
-  let out = "";
-  for (let i = 0; i < length; i += 1) out += ALPHABET[randomInt(ALPHABET.length)];
-  // A punctuation mark in the middle, so it survives any policy that wants one.
-  return `${out.slice(0, 7)}-${out.slice(7)}`;
-}
 
 function parseTeam(): Person[] {
   const raw = process.env.BOOTSTRAP_TEAM;
