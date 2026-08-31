@@ -58,11 +58,14 @@ enum Role {
 }
 
 model Category {
-  id             String @id @default(cuid())
+  id             String  @id @default(cuid())
   organisationId String
   name           String // e.g. "Customer Support", "Stock", "Marketing"
   colour         String // hex
-  sortOrder      Int    @default(0)
+  sortOrder      Int     @default(0)
+  // Retired rather than deleted once anything references it, so historical
+  // reports still resolve the name they were recorded under.
+  isActive       Boolean @default(true)
 
   organisation Organisation   @relation(fields: [organisationId], references: [id])
   templates    TaskTemplate[]

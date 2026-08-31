@@ -7,9 +7,9 @@ import { Role } from "@prisma/client";
 import { Plus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+import { CategoryEditor, type Category } from "./category-editor";
 import { cn } from "@/lib/utils";
 
 type Person = {
@@ -23,8 +23,6 @@ type Person = {
   mustChangePassword: boolean;
   activeTasks: number;
 };
-
-type Category = { id: string; name: string; colour: string };
 
 export function UsersScreen({
   currentUserId,
@@ -129,34 +127,7 @@ export function UsersScreen({
         </div>
       </div>
 
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Categories</CardTitle>
-          <CardDescription>
-            Used to group tasks and to show which area of the business is slipping.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {categories.map((category) => (
-              <span
-                key={category.id}
-                className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm"
-              >
-                <span
-                  aria-hidden="true"
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: category.colour }}
-                />
-                {category.name}
-              </span>
-            ))}
-            {categories.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No categories yet.</p>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
+      <CategoryEditor categories={categories} />
 
       {creating || editing ? (
         <PersonDrawer

@@ -59,7 +59,12 @@ export default async function TemplatesPage() {
       <TemplatesScreen
         templates={rows}
         users={users}
-        categories={categories.map((c) => ({ id: c.id, name: c.name, colour: c.colour }))}
+        categories={categories.map((c) => ({
+          id: c.id,
+          name: c.name,
+          colour: c.colour,
+          isActive: c.isActive,
+        }))}
       />
     </div>
   );

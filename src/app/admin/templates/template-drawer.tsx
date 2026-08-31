@@ -292,11 +292,17 @@ export function TemplateDrawer({
                   onChange={(e) => setCategoryId(e.target.value)}
                 >
                   <option value="">None</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
+                  {categories
+                    // A retired category is hidden, unless this task already
+                    // uses it — otherwise opening the drawer would quietly
+                    // clear the category on save.
+                    .filter((c) => c.isActive || c.id === categoryId)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                        {c.isActive ? "" : " (turned off)"}
+                      </option>
+                    ))}
                 </Select>
               </Field>
 

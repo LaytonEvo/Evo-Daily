@@ -27,7 +27,10 @@ export default async function UsersPage() {
     }),
     prisma.category.findMany({
       where: { organisationId: admin.organisationId },
-      orderBy: { sortOrder: "asc" },
+      orderBy: [{ isActive: "desc" }, { sortOrder: "asc" }],
+      // Usage decides whether a category can be removed outright or only
+      // retired, so the screen can say which before the admin clicks.
+      include: { _count: { select: { templates: true, instances: true } } },
     }),
   ]);
 
@@ -47,7 +50,14 @@ export default async function UsersPage() {
           mustChangePassword: u.mustChangePassword,
           activeTasks: u._count.assignedTemplates,
         }))}
-        categories={categories.map((c) => ({ id: c.id, name: c.name, colour: c.colour }))}
+        categories={categories.map((c) => ({
+          id: c.id,
+          name: c.name,
+          colour: c.colour,
+          isActive: c.isActive,
+          templateCount: c._count.templates,
+          instanceCount: c._count.instances,
+        }))}
       />
     </div>
   );

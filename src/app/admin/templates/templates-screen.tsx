@@ -32,7 +32,7 @@ export type TemplateRow = {
 };
 
 export type Person = { id: string; name: string; isActive: boolean };
-export type Category = { id: string; name: string; colour: string };
+export type Category = { id: string; name: string; colour: string; isActive: boolean };
 
 export function TemplatesScreen({
   templates,
@@ -157,9 +157,12 @@ export function TemplatesScreen({
         </Select>
         <Select value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="">Any category</option>
+          {/* Retired ones stay listed here on purpose: filtering by one is how
+              you find the tasks still sitting on it. */}
           {categories.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
+              {c.isActive ? "" : " (turned off)"}
             </option>
           ))}
         </Select>
