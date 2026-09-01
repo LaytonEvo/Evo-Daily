@@ -4,7 +4,7 @@ import { InstanceStatus } from "@prisma/client";
 import { ArrowLeft, Download } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireAdminPage } from "@/lib/guards";
-import { AppHeader } from "@/components/app-header";
+import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { buildPersonReport, buildWindow } from "@/lib/reports";
@@ -36,10 +36,9 @@ export default async function PersonReportPage({
   const queryString = `from=${window.from}&to=${window.to}`;
 
   return (
-    <div className="min-h-dvh">
-      <AppHeader user={admin} active="reports" />
+    <AppShell user={admin} active="reports">
 
-      <main className="mx-auto w-full max-w-4xl px-4 pb-16 pt-5">
+      <main className="mx-auto w-full max-w-4xl pb-16 pt-2">
         <Link
           href={`/admin/reports?${queryString}`}
           className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
@@ -121,7 +120,7 @@ export default async function PersonReportPage({
                     <span
                       aria-hidden="true"
                       className="h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: category.colour ?? "#94a3b8" }}
+                      style={{ backgroundColor: category.colour ?? "hsl(var(--muted-foreground))" }}
                     />
                     <span className="w-36 shrink-0 truncate text-sm font-medium">
                       {category.name}
@@ -200,7 +199,7 @@ export default async function PersonReportPage({
           </Card>
         </div>
       </main>
-    </div>
+    </AppShell>
   );
 }
 

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { requireAdminPage } from "@/lib/guards";
-import { AppHeader } from "@/components/app-header";
+import { AppShell } from "@/components/app-shell";
 import { buildOrgReport, buildWindow } from "@/lib/reports";
 import { ReportsScreen } from "./reports-screen";
 
@@ -24,9 +24,8 @@ export default async function ReportsPage({
   const report = await buildOrgReport(prisma, admin.organisationId, window);
 
   return (
-    <div className="min-h-dvh">
-      <AppHeader user={admin} active="reports" />
+    <AppShell user={admin} active="reports" title="Reports">
       <ReportsScreen report={report} />
-    </div>
+    </AppShell>
   );
 }

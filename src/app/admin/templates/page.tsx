@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { requireAdminPage } from "@/lib/guards";
-import { AppHeader } from "@/components/app-header";
+import { AppShell } from "@/components/app-shell";
 import { describeSchedule } from "@/lib/recurrence";
 import { templateCompletionRates } from "@/lib/reports";
 import { toDateOnly } from "@/lib/time";
@@ -54,8 +54,7 @@ export default async function TemplatesPage() {
   });
 
   return (
-    <div className="min-h-dvh">
-      <AppHeader user={admin} active="templates" />
+    <AppShell user={admin} active="templates" title="Tasks">
       <TemplatesScreen
         templates={rows}
         users={users}
@@ -66,6 +65,6 @@ export default async function TemplatesPage() {
           isActive: c.isActive,
         }))}
       />
-    </div>
+    </AppShell>
   );
 }

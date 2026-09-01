@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/guards";
 import { ensureInstancesForToday, getMyDay } from "@/lib/my-day";
-import { AppHeader } from "@/components/app-header";
+import { AppShell } from "@/components/app-shell";
 import { MyDayScreen } from "./my-day-screen";
 
 export const metadata = { title: "My day · EvoTasks" };
@@ -24,13 +24,12 @@ export default async function MyDayPage({
   const day = await getMyDay(prisma, user);
 
   return (
-    <div className="min-h-dvh">
-      <AppHeader user={user} />
+    <AppShell user={user}>
       <MyDayScreen
         user={{ name: user.name }}
         day={day}
         notice={denied === "admin" ? "That area is for admins only." : null}
       />
-    </div>
+    </AppShell>
   );
 }

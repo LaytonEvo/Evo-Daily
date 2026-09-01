@@ -55,11 +55,10 @@ export function UsersScreen({
   }
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-4 pb-16 pt-5">
+    <main className="mx-auto w-full max-w-4xl pb-16 pt-2">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">People</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {users.filter((u) => u.isActive).length} active. Admins create accounts — there is no
             sign-up.
           </p>
@@ -72,15 +71,15 @@ export function UsersScreen({
 
       <div className="overflow-hidden rounded-lg border bg-card">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full text-sm sm:min-w-[640px]">
             <thead className="border-b bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="px-3 py-2.5 font-medium">Name</th>
-                <th className="px-3 py-2.5 font-medium">Email</th>
-                <th className="px-3 py-2.5 font-medium">Role</th>
-                <th className="px-3 py-2.5 text-right font-medium">Active tasks</th>
-                <th className="px-3 py-2.5 font-medium">Status</th>
-                <th className="w-20 px-3 py-2.5" />
+                <th className="px-2 py-2.5 sm:px-3 font-medium">Name</th>
+                <th className="hidden px-2 py-2.5 sm:px-3 font-medium sm:table-cell">Email</th>
+                <th className="px-2 py-2.5 sm:px-3 font-medium">Role</th>
+                <th className="hidden px-2 py-2.5 sm:px-3 text-right font-medium sm:table-cell">Active tasks</th>
+                <th className="px-2 py-2.5 sm:px-3 font-medium">Status</th>
+                <th className="w-12 px-2 py-2.5 sm:w-20 sm:px-3" />
               </tr>
             </thead>
             <tbody>
@@ -89,34 +88,40 @@ export function UsersScreen({
                   key={person.id}
                   className={cn("border-b last:border-0", !person.isActive && "opacity-60")}
                 >
-                  <td className="px-3 py-2.5">
+                  <td className="max-w-[42vw] px-2 py-2.5 sm:max-w-none sm:px-3">
                     <Link
                       href={`/admin/reports/${person.id}`}
-                      className="font-medium hover:underline"
+                      className="block max-w-[46vw] truncate font-medium hover:underline sm:max-w-none"
                     >
                       {person.name}
                     </Link>
+                    <span className="block max-w-[46vw] truncate text-xs font-normal text-muted-foreground sm:hidden">
+                      {person.email}
+                    </span>
                     {person.mustChangePassword ? (
-                      <Badge variant="muted" className="ml-2">
-                        password not set
+                      <Badge variant="muted" className="mt-1 sm:ml-2 sm:mt-0">
+                        <span className="sm:hidden">no password</span>
+                        <span className="hidden sm:inline">password not set</span>
                       </Badge>
                     ) : null}
                   </td>
-                  <td className="px-3 py-2.5 text-muted-foreground">{person.email}</td>
-                  <td className="px-3 py-2.5">
+                  <td className="hidden px-2 py-2.5 sm:px-3 text-muted-foreground sm:table-cell">{person.email}</td>
+                  <td className="px-2 py-2.5 sm:px-3">
                     <Badge variant={person.role === Role.ADMIN ? "default" : "muted"}>
                       {person.role === Role.ADMIN ? "Admin" : "Member"}
                     </Badge>
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{person.activeTasks}</td>
-                  <td className="px-3 py-2.5">
+                  <td className="hidden px-2 py-2.5 sm:px-3 text-right tabular-nums sm:table-cell">
+                    {person.activeTasks}
+                  </td>
+                  <td className="px-2 py-2.5 sm:px-3">
                     {person.isActive ? (
                       <Badge variant="success">Active</Badge>
                     ) : (
                       <Badge variant="muted">Deactivated</Badge>
                     )}
                   </td>
-                  <td className="px-3 py-2.5 text-right">
+                  <td className="px-2 py-2.5 sm:px-3 text-right">
                     <Button variant="ghost" size="sm" onClick={() => setEditing(person)}>
                       Edit
                     </Button>

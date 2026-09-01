@@ -115,11 +115,10 @@ export function TemplatesScreen({
   }
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 pb-16 pt-5">
+    <main className="mx-auto w-full max-w-5xl pb-16 pt-2">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Tasks</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {templates.filter((t) => t.isActive).length} active ·{" "}
             {templates.filter((t) => !t.isActive).length} inactive
           </p>
@@ -200,17 +199,17 @@ export function TemplatesScreen({
 
       <div className="overflow-hidden rounded-lg border bg-card">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-sm">
+          <table className="w-full text-sm md:min-w-[720px]">
             <thead className="border-b bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="w-10 px-3 py-2.5" />
-                <th className="px-3 py-2.5 font-medium">Task</th>
-                <th className="px-3 py-2.5 font-medium">Owner</th>
-                <th className="px-3 py-2.5 font-medium">Schedule</th>
-                <th className="px-3 py-2.5 font-medium">Category</th>
-                <th className="px-3 py-2.5 font-medium">30-day rate</th>
-                <th className="px-3 py-2.5 font-medium">Active</th>
-                <th className="w-10 px-3 py-2.5" />
+                <th className="w-8 px-1 py-2.5 sm:w-10 sm:px-3" />
+                <th className="px-2 py-2.5 sm:px-3 font-medium">Task</th>
+                <th className="hidden px-2 py-2.5 sm:px-3 font-medium md:table-cell">Owner</th>
+                <th className="hidden px-2 py-2.5 sm:px-3 font-medium md:table-cell">Schedule</th>
+                <th className="hidden px-2 py-2.5 sm:px-3 font-medium md:table-cell">Category</th>
+                <th className="hidden px-2 py-2.5 sm:px-3 font-medium md:table-cell">30-day rate</th>
+                <th className="px-2 py-2.5 sm:px-3 font-medium">Active</th>
+                <th className="w-8 px-1 py-2.5 sm:w-10 sm:px-3" />
               </tr>
             </thead>
             <tbody>
@@ -224,7 +223,7 @@ export function TemplatesScreen({
                       !template.isActive && "opacity-60",
                     )}
                   >
-                    <td className="px-3 py-2.5">
+                    <td className="px-1 py-2.5 sm:px-3">
                       <input
                         type="checkbox"
                         aria-label={`Select ${template.title}`}
@@ -233,7 +232,7 @@ export function TemplatesScreen({
                         onChange={() => toggleSelected(template.id)}
                       />
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-2 py-2.5 sm:px-3">
                       <button
                         type="button"
                         className="text-left font-medium hover:underline"
@@ -246,14 +245,17 @@ export function TemplatesScreen({
                           by {template.dueTime}
                         </span>
                       ) : null}
+                      <span className="block max-w-[52vw] truncate text-xs text-muted-foreground md:hidden">
+                        {template.assigneeName} · {template.scheduleLabel}
+                      </span>
                     </td>
-                    <td className="px-3 py-2.5 text-muted-foreground">
+                    <td className="hidden px-2 py-2.5 sm:px-3 text-muted-foreground md:table-cell">
                       {template.assigneeName}
                     </td>
-                    <td className="px-3 py-2.5 text-muted-foreground">
+                    <td className="hidden px-2 py-2.5 sm:px-3 text-muted-foreground md:table-cell">
                       {template.scheduleLabel}
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="hidden px-2 py-2.5 sm:px-3 md:table-cell">
                       {category ? (
                         <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                           <span
@@ -267,13 +269,13 @@ export function TemplatesScreen({
                         <span className="text-muted-foreground">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="hidden px-2 py-2.5 sm:px-3 md:table-cell">
                       <RateCell
                         rate={template.completionRate}
                         assigned={template.assignedLast30}
                       />
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-2 py-2.5 sm:px-3">
                       <button
                         type="button"
                         role="switch"
@@ -301,7 +303,7 @@ export function TemplatesScreen({
                         />
                       </button>
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-2 py-2.5 sm:px-3">
                       <Button
                         variant="ghost"
                         size="icon"

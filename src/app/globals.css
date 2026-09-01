@@ -3,29 +3,67 @@
 @tailwind utilities;
 
 @layer base {
+  /*
+   * Horizon UI's palette, expressed as the semantic tokens the components
+   * already speak. Screens were built against these names, so the look changes
+   * here and nowhere else.
+   *
+   * The signature is a violet brand on a cool off-white ground, white cards
+   * floating on it with a wide soft shadow rather than a border, and navy —
+   * not grey — for text and for the dark theme.
+   */
   :root {
-    --background: 210 20% 98%;
-    --foreground: 222 47% 11%;
+    --background: 222 83% 98%; /* #F4F7FE */
+    --foreground: 230 53% 23%; /* #1B2559 */
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    --primary: 158 64% 27%;
+    --card-foreground: 230 53% 23%;
+    --primary: 247 96% 57%; /* #422AFB */
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 20% 94%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 20% 96%;
-    --muted-foreground: 215 16% 42%;
-    --accent: 210 20% 94%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 72% 45%;
+    --secondary: 222 83% 98%;
+    --secondary-foreground: 230 53% 23%;
+    --muted: 222 83% 96%;
+    --muted-foreground: 226 28% 56%; /* #707EAE */
+    --accent: 253 100% 95%; /* #E9E3FF */
+    --accent-foreground: 247 96% 57%;
+    --destructive: 5 82% 62%; /* #EE5D50 */
     --destructive-foreground: 0 0% 100%;
-    --success: 152 60% 34%;
+    --success: 164 95% 41%; /* #05CD99 */
     --success-foreground: 0 0% 100%;
-    --warning: 33 90% 45%;
-    --warning-foreground: 0 0% 100%;
-    --border: 214 20% 88%;
-    --input: 214 20% 88%;
-    --ring: 158 64% 32%;
-    --radius: 0.75rem;
+    --warning: 36 100% 64%; /* #FFB547 */
+    --warning-foreground: 230 53% 23%;
+    --border: 227 32% 89%; /* #DADEEC */
+    --input: 227 32% 89%;
+    --ring: 247 96% 57%;
+    /* Horizon's cards are large-radius and shadowed, not outlined. */
+    --radius: 1.25rem;
+    --shadow-card: 14px 17px 40px 4px rgba(112, 144, 176, 0.18);
+    --sidebar: 0 0% 100%;
+  }
+
+  .dark {
+    --background: 228 67% 13%; /* #0B1437 */
+    --foreground: 0 0% 100%;
+    --card: 227 60% 17%; /* #111C44 */
+    --card-foreground: 0 0% 100%;
+    --primary: 252 100% 66%; /* #7551FF — brand-400 carries better on navy */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 228 47% 20%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 228 47% 20%;
+    --muted-foreground: 225 32% 73%; /* #A3AED0 */
+    --accent: 228 47% 24%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 5 82% 62%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 164 95% 41%;
+    --success-foreground: 0 0% 100%;
+    --warning: 36 100% 64%;
+    --warning-foreground: 228 67% 13%;
+    --border: 228 47% 20%; /* #1B254B */
+    --input: 228 47% 20%;
+    --ring: 252 100% 66%;
+    --shadow-card: none;
+    --sidebar: 227 60% 17%;
   }
 
   * {
@@ -50,5 +88,11 @@
 
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Horizon's card lift. Dark mode drops it — the navy surface separates on
+     its own, and the shadow only muddies it. */
+  .shadow-card {
+    box-shadow: var(--shadow-card);
   }
 }

@@ -101,7 +101,7 @@ export function MyDayScreen({
   const firstName = user.name.split(" ")[0] || user.name;
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 pb-16 pt-5 safe-bottom">
+    <main className="mx-auto w-full max-w-2xl pb-16 pt-2 safe-bottom">
       {notice ? (
         <p className="mb-4 rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">{notice}</p>
       ) : null}

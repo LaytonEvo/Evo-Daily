@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { requireAdminPage } from "@/lib/guards";
-import { AppHeader } from "@/components/app-header";
+import { AppShell } from "@/components/app-shell";
 import { UsersScreen } from "./users-screen";
 
 export const metadata = { title: "People · EvoTasks" };
@@ -35,8 +35,7 @@ export default async function UsersPage() {
   ]);
 
   return (
-    <div className="min-h-dvh">
-      <AppHeader user={admin} active="users" />
+    <AppShell user={admin} active="users" title="People">
       <UsersScreen
         currentUserId={admin.id}
         users={users.map((u) => ({
@@ -59,6 +58,6 @@ export default async function UsersPage() {
           instanceCount: c._count.instances,
         }))}
       />
-    </div>
+    </AppShell>
   );
 }

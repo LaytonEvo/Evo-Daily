@@ -34,7 +34,7 @@ export function TaskRow({
       className={cn(
         "rounded-lg border bg-card shadow-sm transition-colors",
         done && "border-success/30 bg-success/5",
-        muted && !done && "bg-muted/40",
+        muted && !done && "opacity-70",
       )}
     >
       <div className="flex items-stretch">
@@ -77,7 +77,7 @@ export function TaskRow({
                   <span
                     aria-hidden="true"
                     className="h-2 w-2 shrink-0 rounded-full"
-                    style={{ backgroundColor: task.categoryColour ?? "#94a3b8" }}
+                    style={{ backgroundColor: task.categoryColour ?? "hsl(var(--muted-foreground))" }}
                   />
                   {task.categoryName}
                 </span>

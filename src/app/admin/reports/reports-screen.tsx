@@ -21,10 +21,9 @@ export function ReportsScreen({ report }: { report: OrgReport }) {
   const query = `from=${window.from}&to=${window.to}`;
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 pb-16 pt-5">
+    <main className="mx-auto w-full max-w-5xl pb-16 pt-2">
       <div className="mb-5">
-        <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {formatDateOnly(window.from, { withYear: true })} to{" "}
           {formatDateOnly(window.to, { withYear: true })} · {window.days} days
           {window.requestedTo !== window.to ? " (clipped to today)" : ""}
@@ -177,7 +176,7 @@ function Leaderboard({ rows, query }: { rows: LeaderboardRow[]; query: string })
 
   function header(key: SortKey, label: string, className?: string) {
     return (
-      <th className={cn("px-3 py-2.5 font-medium", className)}>
+      <th className={cn("px-2 py-2.5 sm:px-3 font-medium", className)}>
         <button
           type="button"
           className="inline-flex items-center gap-1 hover:text-foreground"
@@ -209,21 +208,21 @@ function Leaderboard({ rows, query }: { rows: LeaderboardRow[]; query: string })
       </CardHeader>
       <CardContent className="px-0 sm:px-0">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full text-sm sm:min-w-[640px]">
             <thead className="border-y bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 {header("name", "Person")}
-                {header("assigned", "Assigned", "text-right")}
+                {header("assigned", "Assigned", "hidden text-right sm:table-cell")}
                 {header("completed", "Completed", "text-right")}
                 {header("missed", "Missed", "text-right")}
                 {header("completionRate", "Completion", "text-right")}
-                {header("onTimeRate", "On time", "text-right")}
+                {header("onTimeRate", "On time", "hidden text-right sm:table-cell")}
               </tr>
             </thead>
             <tbody>
               {sorted.map((row) => (
                 <tr key={row.userId} className="border-b last:border-0 hover:bg-accent/50">
-                  <td className="px-3 py-2.5">
+                  <td className="px-2 py-2.5 sm:px-3">
                     <Link
                       href={`/admin/reports/${row.userId}?${query}`}
                       className="font-medium hover:underline"
@@ -241,20 +240,22 @@ function Leaderboard({ rows, query }: { rows: LeaderboardRow[]; query: string })
                       </Badge>
                     ) : null}
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{row.assigned}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{row.completed}</td>
+                  <td className="hidden px-2 py-2.5 text-right tabular-nums sm:table-cell sm:px-3">
+                    {row.assigned}
+                  </td>
+                  <td className="px-2 py-2.5 sm:px-3 text-right tabular-nums">{row.completed}</td>
                   <td
                     className={cn(
-                      "px-3 py-2.5 text-right tabular-nums",
+                      "px-2 py-2.5 sm:px-3 text-right tabular-nums",
                       row.missed > 0 && "text-destructive",
                     )}
                   >
                     {row.missed}
                   </td>
-                  <td className="px-3 py-2.5 text-right">
+                  <td className="px-2 py-2.5 sm:px-3 text-right">
                     <RateBar rate={row.completionRate} />
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
+                  <td className="hidden px-2 py-2.5 text-right tabular-nums text-muted-foreground sm:table-cell sm:px-3">
                     {formatRate(row.onTimeRate)}
                   </td>
                 </tr>
@@ -297,21 +298,21 @@ function ProblemTasks({ report, query }: { report: OrgReport; query: string }) {
       </CardHeader>
       <CardContent className="px-0 sm:px-0">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full text-sm sm:min-w-[640px]">
             <thead className="border-y bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="px-3 py-2.5 font-medium">Task</th>
-                <th className="px-3 py-2.5 font-medium">Owner</th>
-                <th className="px-3 py-2.5 font-medium">Schedule</th>
-                <th className="px-3 py-2.5 text-right font-medium">Due</th>
-                <th className="px-3 py-2.5 text-right font-medium">Missed</th>
-                <th className="px-3 py-2.5 text-right font-medium">Completion</th>
+                <th className="px-2 py-2.5 sm:px-3 font-medium">Task</th>
+                <th className="hidden px-2 py-2.5 font-medium sm:table-cell sm:px-3">Owner</th>
+                <th className="hidden px-2 py-2.5 font-medium sm:table-cell sm:px-3">Schedule</th>
+                <th className="px-2 py-2.5 sm:px-3 text-right font-medium">Due</th>
+                <th className="px-2 py-2.5 sm:px-3 text-right font-medium">Missed</th>
+                <th className="px-2 py-2.5 sm:px-3 text-right font-medium">Completion</th>
               </tr>
             </thead>
             <tbody>
               {worst.map((task) => (
                 <tr key={task.templateId} className="border-b last:border-0">
-                  <td className="px-3 py-2.5 font-medium">
+                  <td className="max-w-[44vw] px-2 py-2.5 font-medium sm:max-w-none sm:px-3">
                     {task.title}
                     {task.categoryName ? (
                       <span className="ml-2 text-xs text-muted-foreground">
@@ -323,19 +324,26 @@ function ProblemTasks({ report, query }: { report: OrgReport; query: string }) {
                         inactive
                       </Badge>
                     ) : null}
+                    <span className="block max-w-[42vw] truncate text-xs font-normal text-muted-foreground sm:hidden">
+                      {task.assigneeName} · {task.schedule}
+                    </span>
                   </td>
-                  <td className="px-3 py-2.5 text-muted-foreground">{task.assigneeName}</td>
-                  <td className="px-3 py-2.5 text-muted-foreground">{task.schedule}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{task.assigned}</td>
+                  <td className="hidden px-2 py-2.5 text-muted-foreground sm:table-cell sm:px-3">
+                    {task.assigneeName}
+                  </td>
+                  <td className="hidden px-2 py-2.5 text-muted-foreground sm:table-cell sm:px-3">
+                    {task.schedule}
+                  </td>
+                  <td className="px-2 py-2.5 sm:px-3 text-right tabular-nums">{task.assigned}</td>
                   <td
                     className={cn(
-                      "px-3 py-2.5 text-right tabular-nums",
+                      "px-2 py-2.5 sm:px-3 text-right tabular-nums",
                       task.missed > 0 && "text-destructive",
                     )}
                   >
                     {task.missed}
                   </td>
-                  <td className="px-3 py-2.5 text-right">
+                  <td className="px-2 py-2.5 sm:px-3 text-right">
                     <RateBar rate={task.completionRate} />
                   </td>
                 </tr>
@@ -373,7 +381,7 @@ function Categories({ report, query }: { report: OrgReport; query: string }) {
               <span
                 aria-hidden="true"
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: category.colour ?? "#94a3b8" }}
+                style={{ backgroundColor: category.colour ?? "hsl(var(--muted-foreground))" }}
               />
               <span className="w-40 shrink-0 truncate text-sm font-medium">{category.name}</span>
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
