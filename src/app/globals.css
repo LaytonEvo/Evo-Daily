@@ -38,6 +38,10 @@
     --radius: 1.25rem;
     --shadow-card: 14px 17px 40px 4px rgba(112, 144, 176, 0.18);
     --sidebar: 0 0% 100%;
+    /* The auth panel is a brand surface, not a themed one: it stays the same
+       violet in both themes, the way a printed cover would. */
+    --brand-from: #7551FF;
+    --brand-to: #3311DB;
   }
 
   .dark {
@@ -64,6 +68,8 @@
     --ring: 252 100% 66%;
     --shadow-card: none;
     --sidebar: 227 60% 17%;
+    --brand-from: #7551FF;
+    --brand-to: #3311DB;
   }
 
   * {
