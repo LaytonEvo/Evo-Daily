@@ -9,6 +9,7 @@ import { Role } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { redirect } from "next/navigation";
 import { auth } from "./auth";
+import { prisma } from "./db";
 import { ApiError } from "./errors";
 import type { Actor } from "./instances";
 
@@ -23,16 +24,50 @@ export type SessionUser = {
   mustChangePassword: boolean;
 };
 
+/**
+ * The signed-in user, read fresh.
+ *
+ * The token supplies identity and nothing else. Every field a guard decides
+ * on comes from the database, because a JWT here lives thirty days and its
+ * claims are a snapshot of whoever signed in a month ago.
+ *
+ * Trusting those claims went wrong in all three directions: a deactivated
+ * account kept working until its token expired, a change of role waited for
+ * the next sign-in, and — the one that stranded people — finishing the forced
+ * password change left `mustChangePassword` true in the token, so /my-day
+ * bounced them back to the change screen they had just completed, and /login
+ * bounced them there too. The only way out was to clear the cookie.
+ *
+ * The cost is one lookup on a primary key per guarded request, on pages that
+ * all query the database anyway.
+ */
 export async function currentUser(): Promise<SessionUser | null> {
   const session = await auth();
   if (!session?.user?.id) return null;
+
+  const record = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      organisationId: true,
+      mustChangePassword: true,
+      isActive: true,
+    },
+  });
+
+  // Deleted or deactivated since the token was issued: treat as signed out.
+  if (!record || !record.isActive) return null;
+
   return {
-    id: session.user.id,
-    name: session.user.name ?? "",
-    email: session.user.email ?? "",
-    role: session.user.role,
-    organisationId: session.user.organisationId,
-    mustChangePassword: session.user.mustChangePassword,
+    id: record.id,
+    name: record.name,
+    email: record.email,
+    role: record.role,
+    organisationId: record.organisationId,
+    mustChangePassword: record.mustChangePassword,
   };
 }
 
