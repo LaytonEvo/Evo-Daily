@@ -22,6 +22,9 @@ export function managerChannelId(): string | null {
   return process.env.SLACK_MANAGER_CHANNEL_ID || null;
 }
 
+/** Slack Block Kit. Loosely typed — we build every block we send. */
+export type Block = Record<string, unknown>;
+
 export function appUrl(path = ""): string {
   const base = (process.env.NEXTAUTH_URL ?? "").replace(/\/$/, "");
   return `${base}${path}`;
@@ -33,7 +36,11 @@ type PostResult = { ok: boolean; error?: string };
  * Post a message. A Slack outage must never take the app down or fail a cron
  * run, so every failure is reported back rather than thrown.
  */
-export async function postMessage(channel: string, text: string): Promise<PostResult> {
+export async function postMessage(
+  channel: string,
+  text: string,
+  blocks?: Block[],
+): Promise<PostResult> {
   const token = process.env.SLACK_BOT_TOKEN;
   if (!token) return { ok: false, error: "slack_not_configured" };
 
@@ -44,7 +51,9 @@ export async function postMessage(channel: string, text: string): Promise<PostRe
         authorization: `Bearer ${token}`,
         "content-type": "application/json; charset=utf-8",
       },
-      body: JSON.stringify({ channel, text, unfurl_links: false }),
+      // `text` is still sent alongside blocks: it is what a phone notification
+      // and a screen reader read out.
+      body: JSON.stringify({ channel, text, unfurl_links: false, ...(blocks ? { blocks } : {}) }),
     });
 
     const body = (await response.json()) as { ok: boolean; error?: string };
@@ -61,4 +70,25 @@ export function escape(text: string): string {
 
 export function link(url: string, label: string): string {
   return `<${url}|${escape(label)}>`;
+}
+
+/**
+ * Replace a message in place, used to grey out a task the moment its button is
+ * tapped. Slack gives a response_url with every interaction; it needs no token
+ * and works for five actions over thirty minutes, which is ample for one tap.
+ */
+export async function respond(
+  responseUrl: string,
+  body: { text: string; blocks?: Block[]; replace_original?: boolean },
+): Promise<PostResult> {
+  try {
+    const response = await fetch(responseUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json; charset=utf-8" },
+      body: JSON.stringify({ replace_original: true, ...body }),
+    });
+    return { ok: response.ok };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "request_failed" };
+  }
 }

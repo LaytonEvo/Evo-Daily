@@ -5,7 +5,8 @@
 
 import { InstanceStatus, type PrismaClient } from "@prisma/client";
 import { buildOrgReport, buildWindow } from "./reports";
-import { escape, appUrl, link, managerChannelId, postMessage, slackEnabled } from "./slack";
+import { escape, appUrl, link, managerChannelId, postMessage, slackEnabled, type Block } from "./slack";
+import { briefBlocks } from "./slack-blocks";
 import { formatRate } from "./utils";
 import {
   addDays,
@@ -21,8 +22,10 @@ export type NudgeOutcome = {
   skipped?: string;
   sent: number;
   failed: number;
-  messages?: { to: string; text: string }[];
+  messages?: Message[];
 };
+
+type Message = { to: string; text: string; blocks?: Block[] };
 
 type Options = {
   today?: DateOnly;
@@ -32,7 +35,7 @@ type Options = {
 
 async function deliver(
   job: string,
-  messages: { to: string; text: string }[],
+  messages: Message[],
   dryRun: boolean,
 ): Promise<NudgeOutcome> {
   if (dryRun) return { job, sent: 0, failed: 0, messages };
@@ -40,7 +43,7 @@ async function deliver(
   let sent = 0;
   let failed = 0;
   for (const message of messages) {
-    const result = await postMessage(message.to, message.text);
+    const result = await postMessage(message.to, message.text, message.blocks);
     if (result.ok) sent += 1;
     else failed += 1;
   }
@@ -62,7 +65,7 @@ export async function morningBrief(
     select: { id: true, name: true, slackUserId: true },
   });
 
-  const messages: { to: string; text: string }[] = [];
+  const messages: Message[] = [];
 
   for (const user of users) {
     const tasks = await db.taskInstance.findMany({
@@ -72,7 +75,7 @@ export async function morningBrief(
         dueDate: { lte: toDbDate(today) },
       },
       orderBy: [{ dueDate: "asc" }, { dueAt: "asc" }],
-      select: { title: true, dueDate: true, dueAt: true },
+      select: { id: true, title: true, dueDate: true, dueAt: true },
     });
 
     if (tasks.length === 0) continue;
@@ -86,13 +89,23 @@ export async function morningBrief(
       return `• ${escape(task.title)}${time}${late}`;
     });
 
+    const heading = `*${escape(user.name.split(" ")[0])} — ${tasks.length} task${tasks.length === 1 ? "" : "s"} today*`;
+
     messages.push({
       to: user.slackUserId!,
-      text: [
-        `*${escape(user.name.split(" ")[0])} — ${tasks.length} task${tasks.length === 1 ? "" : "s"} today*`,
-        ...lines,
-        link(appUrl("/my-day"), "Open EvoTasks"),
-      ].join("\n"),
+      // The text is the notification and the fallback; the blocks carry the
+      // per-task Done buttons.
+      text: [heading, ...lines, link(appUrl("/my-day"), "Open EvoTasks")].join("\n"),
+      blocks: briefBlocks(
+        heading,
+        tasks.map((task) => ({
+          id: task.id,
+          title: task.title,
+          dueAt: task.dueAt,
+          overdue: task.dueDate < toDbDate(today),
+          overdueFrom: formatDateOnly(task.dueDate),
+        })),
+      ),
     });
   }
 
