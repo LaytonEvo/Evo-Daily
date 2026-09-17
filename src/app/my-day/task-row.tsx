@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { InstanceStatus } from "@prisma/client";
 import { Check, ChevronDown, Clock, StickyNote } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { MyDayTask } from "@/lib/my-day";
 
@@ -14,6 +15,7 @@ export function TaskRow({
   task,
   muted = false,
   busy = false,
+  requiresReason = false,
   trailing,
   onToggle,
   onSaveNote,
@@ -21,13 +23,28 @@ export function TaskRow({
   task: MyDayTask;
   muted?: boolean;
   busy?: boolean;
+  /** Late tasks cannot be ticked without saying what held them up. */
+  requiresReason?: boolean;
   trailing?: React.ReactNode;
   onToggle: (done: boolean, note?: string | null) => void;
   onSaveNote: (note: string | null) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [noteDraft, setNoteDraft] = useState(task.note ?? "");
+  const [askingReason, setAskingReason] = useState(false);
+  const [reason, setReason] = useState("");
   const done = task.status === InstanceStatus.COMPLETED;
+
+  function onCheckboxClick() {
+    // Untick, or a task that owes no explanation: straight through.
+    if (done || !requiresReason || task.note?.trim()) {
+      onToggle(!done);
+      return;
+    }
+    // The server refuses this without a reason, so ask here rather than let
+    // the tick land and bounce back.
+    setAskingReason(true);
+  }
 
   return (
     <div
@@ -44,7 +61,7 @@ export function TaskRow({
           aria-checked={done}
           aria-label={done ? `Mark ${task.title} as not done` : `Mark ${task.title} as done`}
           disabled={!task.editable || busy}
-          onClick={() => onToggle(!done)}
+          onClick={onCheckboxClick}
           className={cn(
             "flex w-14 shrink-0 items-center justify-center rounded-l-lg transition-colors",
             "disabled:opacity-50",
@@ -118,6 +135,50 @@ export function TaskRow({
           </button>
         </div>
       </div>
+
+      {askingReason ? (
+        <div className="border-t bg-destructive/5 px-4 py-3 animate-fade-in">
+          <label
+            htmlFor={`reason-${task.id}`}
+            className="text-xs font-medium text-destructive"
+          >
+            This one is late. What held it up?
+          </label>
+          <textarea
+            id={`reason-${task.id}`}
+            rows={2}
+            maxLength={500}
+            autoFocus
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Supplier did not deliver until this morning"
+            className="mt-1 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          <div className="mt-2 flex gap-2">
+            <Button
+              size="sm"
+              disabled={!reason.trim() || busy}
+              onClick={() => {
+                onToggle(true, reason.trim());
+                setAskingReason(false);
+                setReason("");
+              }}
+            >
+              Mark done
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setAskingReason(false);
+                setReason("");
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {expanded ? (
         <div className="border-t px-4 py-3 animate-fade-in">

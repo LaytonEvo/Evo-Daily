@@ -12,7 +12,14 @@
  */
 
 import { InstanceStatus, Role, type Prisma, type PrismaClient } from "@prisma/client";
-import { addDays, compareDateOnly, daysBetween, todayInLondon, type DateOnly } from "./time";
+import {
+  addDays,
+  compareDateOnly,
+  daysBetween,
+  toDateOnly,
+  todayInLondon,
+  type DateOnly,
+} from "./time";
 import { getSettings } from "./settings";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
@@ -124,6 +131,18 @@ export async function completeInstance(
     );
   }
 
+  // A late completion has to say why. Enforced here rather than in the form,
+  // because the same transition arrives from Slack and from the API, and a
+  // rule that only the web form knows about is not a rule.
+  const isLate = compareDateOnly(toDateOnly(instance.dueDate), today) < 0;
+  const reason = options.note ?? instance.note;
+  if (isLate && !reason?.trim()) {
+    throw new TransitionError(
+      "This one is late. Say what held it up before ticking it off.",
+      422,
+    );
+  }
+
   // wasLate is the metric with teeth: catching up inside the grace window
   // still counts as completed, but it is permanently recorded as late.
   const wasLate = instance.dueAt ? now.getTime() > instance.dueAt.getTime() : false;
@@ -225,4 +244,62 @@ export function isOverdue(
 
 export function daysLate(dueDate: Date | DateOnly, today: DateOnly = todayInLondon()): number {
   return Math.max(0, daysBetween(dueDate, today));
+}
+
+/**
+ * Write a task off as not done — admins only.
+ *
+ * The nightly sweep already moves a task to MISSED once its grace window
+ * closes. This is the same destination reached deliberately: the work is not
+ * going to happen, so it leaves the assignee's day now rather than sitting
+ * there being scrolled past, and counts as a miss in the reporting either way.
+ *
+ * A reason is required. A miss with no explanation is the thing that makes a
+ * leaderboard arguable three weeks later.
+ */
+export async function markNotDone(
+  db: DbClient,
+  instanceId: string,
+  actor: Actor,
+  reason: string,
+  options: { now?: Date } = {},
+) {
+  if (actor.role !== Role.ADMIN) {
+    throw new TransitionError("Only an admin can write a task off", 403);
+  }
+  if (!reason.trim()) {
+    throw new TransitionError("Say why this is not getting done", 422);
+  }
+
+  const now = options.now ?? new Date();
+  const instance = await loadInstanceFor(db, instanceId, actor);
+
+  if (instance.status === InstanceStatus.MISSED) return instance;
+
+  return atomically(db, async (tx) => {
+    const updated = await tx.taskInstance.update({
+      where: { id: instance.id },
+      data: {
+        status: InstanceStatus.MISSED,
+        // Clear any completion: this is the opposite outcome, and leaving
+        // completedAt set would make the reports contradict themselves.
+        completedAt: null,
+        completedById: null,
+        wasLate: false,
+        note: reason.trim(),
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        organisationId: instance.organisationId,
+        instanceId: instance.id,
+        userId: actor.id,
+        fromStatus: instance.status,
+        toStatus: InstanceStatus.MISSED,
+        source: "USER",
+        at: now,
+      },
+    });
+    return updated;
+  });
 }

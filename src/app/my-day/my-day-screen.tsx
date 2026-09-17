@@ -7,6 +7,7 @@ import { ProgressRing } from "@/components/progress-ring";
 import { useToast } from "@/components/ui/toast";
 import type { MyDay, MyDayTask } from "@/lib/my-day";
 import { formatDateOnlyLong } from "@/lib/time";
+import { cn } from "@/lib/utils";
 import { TaskRow } from "./task-row";
 import { Section } from "./section";
 
@@ -39,6 +40,9 @@ export function MyDayScreen({
   const allClear = owedTotal > 0 && owedDone === owedTotal;
 
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  // Overdue work lives behind its own tab. Today's list stays the clean thing
+  // you open in the morning; the backlog is one tap away, not in the way.
+  const [tab, setTab] = useState<"today" | "overdue">("today");
 
   function markPending(id: string, on: boolean) {
     setPendingIds((current) => {
@@ -134,59 +138,125 @@ export function MyDayScreen({
         </div>
       ) : null}
 
+      {sections.overdue.length > 0 ? (
+        <div
+          role="tablist"
+          aria-label="Which tasks to show"
+          className="mb-4 flex gap-1 rounded-xl bg-muted p-1"
+        >
+          <TabButton
+            selected={tab === "today"}
+            onClick={() => setTab("today")}
+            label="Today"
+            count={sections.dueToday.length}
+          />
+          <TabButton
+            selected={tab === "overdue"}
+            onClick={() => setTab("overdue")}
+            label="Overdue"
+            count={sections.overdue.length}
+            tone="danger"
+          />
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-6">
-        <Section
-          title="Overdue"
-          tone="danger"
-          count={sections.overdue.length}
-          description="Still inside the catch-up window."
-        >
-          {sections.overdue.map((task) => (
-            <TaskRow
-              key={task.id}
-              task={task}
-              busy={pendingIds.has(task.id)}
-              onToggle={(done, note) => setDone(task, done, note)}
-              onSaveNote={(note) => saveNote(task, note)}
-              trailing={
-                <span className="text-xs font-medium text-destructive">
-                  {task.daysLate === 1 ? "1 day late" : `${task.daysLate} days late`}
-                </span>
-              }
-            />
-          ))}
-        </Section>
+        {tab === "overdue" ? (
+          <Section
+            title="Overdue"
+            tone="danger"
+            count={sections.overdue.length}
+            description="Still inside the catch-up window. Ticking one off needs a reason."
+          >
+            {sections.overdue.map((task) => (
+              <TaskRow
+                key={task.id}
+                task={task}
+                busy={pendingIds.has(task.id)}
+                requiresReason
+                onToggle={(done, note) => setDone(task, done, note)}
+                onSaveNote={(note) => saveNote(task, note)}
+                trailing={
+                  <span className="text-xs font-medium text-destructive">
+                    {task.daysLate === 1 ? "1 day late" : `${task.daysLate} days late`}
+                  </span>
+                }
+              />
+            ))}
+          </Section>
+        ) : (
+          <>
+            <Section title="Today" count={sections.dueToday.length}>
+              {sections.dueToday.map((task) => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  busy={pendingIds.has(task.id)}
+                  onToggle={(done, note) => setDone(task, done, note)}
+                  onSaveNote={(note) => saveNote(task, note)}
+                />
+              ))}
+            </Section>
 
-        <Section title="Today" count={sections.dueToday.length}>
-          {sections.dueToday.map((task) => (
-            <TaskRow
-              key={task.id}
-              task={task}
-              busy={pendingIds.has(task.id)}
-              onToggle={(done, note) => setDone(task, done, note)}
-              onSaveNote={(note) => saveNote(task, note)}
-            />
-          ))}
-        </Section>
-
-        <Section
-          title="Done today"
-          tone="success"
-          count={sections.doneToday.length}
-          collapsedByDefault
-        >
-          {sections.doneToday.map((task) => (
-            <TaskRow
-              key={task.id}
-              task={task}
-              busy={pendingIds.has(task.id)}
-              onToggle={(done, note) => setDone(task, done, note)}
-              onSaveNote={(note) => saveNote(task, note)}
-            />
-          ))}
-        </Section>
+            <Section
+              title="Done today"
+              tone="success"
+              count={sections.doneToday.length}
+              collapsedByDefault
+            >
+              {sections.doneToday.map((task) => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  busy={pendingIds.has(task.id)}
+                  onToggle={(done, note) => setDone(task, done, note)}
+                  onSaveNote={(note) => saveNote(task, note)}
+                />
+              ))}
+            </Section>
+          </>
+        )}
       </div>
+
     </main>
+  );
+}
+
+function TabButton({
+  selected,
+  onClick,
+  label,
+  count,
+  tone = "default",
+}: {
+  selected: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+  tone?: "default" | "danger";
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={selected}
+      onClick={onClick}
+      className={cn(
+        "flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors",
+        selected ? "bg-card shadow-sm" : "text-muted-foreground hover:text-foreground",
+        selected && tone === "danger" && "text-destructive",
+      )}
+    >
+      {label}
+      <span
+        className={cn(
+          "rounded-full px-1.5 py-0.5 text-xs tabular-nums",
+          tone === "danger" ? "bg-destructive/10 text-destructive" : "bg-muted-foreground/10",
+        )}
+      >
+        {count}
+      </span>
+    </button>
   );
 }
 

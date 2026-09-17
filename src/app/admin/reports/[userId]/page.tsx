@@ -5,6 +5,7 @@ import { ArrowLeft, Download } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireAdminPage } from "@/lib/guards";
 import { AppShell } from "@/components/app-shell";
+import { NotDoneButton } from "./not-done-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { buildPersonReport, buildWindow } from "@/lib/reports";
@@ -170,6 +171,7 @@ export default async function PersonReportPage({
                       <th className="px-3 py-2.5 font-medium">Status</th>
                       <th className="px-3 py-2.5 font-medium">Completed</th>
                       <th className="px-3 py-2.5 font-medium">Note</th>
+                      <th className="w-24 px-3 py-2.5" />
                     </tr>
                   </thead>
                   <tbody>
@@ -189,6 +191,13 @@ export default async function PersonReportPage({
                         </td>
                         <td className="max-w-[220px] truncate px-3 py-2.5 text-muted-foreground">
                           {row.note ?? ""}
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <NotDoneButton
+                            instanceId={row.id}
+                            title={row.title}
+                            status={row.status}
+                          />
                         </td>
                       </tr>
                     ))}

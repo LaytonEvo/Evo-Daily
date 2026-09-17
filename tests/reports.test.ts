@@ -10,6 +10,10 @@ import {
 } from "./helpers/db";
 import { generateInstances, regenerateFutureInstances, sweepMissed } from "@/lib/recurrence";
 import { completeInstance } from "@/lib/instances";
+
+// These fixtures backfill history, so every completion is a late one and
+// carries the reason the service now requires.
+const LATE = { note: "Backfilled history" };
 import {
   buildOrgReport,
   buildPersonReport,
@@ -145,7 +149,7 @@ describeDb("org report", () => {
       orderBy: { dueDate: "asc" },
     });
     for (const [index, instance] of pending.entries()) {
-      if (index % 3 !== 0) await completeInstance(prisma, instance.id, admin());
+      if (index % 3 !== 0) await completeInstance(prisma, instance.id, admin(), LATE);
     }
     await sweepMissed(prisma, TODAY, 2);
 
@@ -217,14 +221,14 @@ describeDb("org report", () => {
     const bradsWork = await prisma.taskInstance.findMany({
       where: { assigneeId: fixture.otherMemberId },
     });
-    for (const instance of bradsWork) await completeInstance(prisma, instance.id, admin());
+    for (const instance of bradsWork) await completeInstance(prisma, instance.id, admin(), LATE);
 
     const alexWork = await prisma.taskInstance.findMany({
       where: { assigneeId: fixture.memberId },
       orderBy: { dueDate: "asc" },
     });
     for (const [index, instance] of alexWork.entries()) {
-      if (index % 10 !== 0) await completeInstance(prisma, instance.id, admin());
+      if (index % 10 !== 0) await completeInstance(prisma, instance.id, admin(), LATE);
     }
 
     const report = await buildOrgReport(prisma, fixture.orgId, buildWindow({ days: 30 }, TODAY));
@@ -259,10 +263,10 @@ describeDb("org report", () => {
     await generateInstances(prisma, addDays(TODAY, -20), TODAY);
 
     for (const instance of await instancesFor(good.id)) {
-      await completeInstance(prisma, instance.id, admin());
+      await completeInstance(prisma, instance.id, admin(), LATE);
     }
     for (const instance of await instancesFor(rare.id)) {
-      await completeInstance(prisma, instance.id, admin());
+      await completeInstance(prisma, instance.id, admin(), LATE);
     }
     await sweepMissed(prisma, TODAY, 2);
 
@@ -301,7 +305,7 @@ describeDb("org report", () => {
     const recent = await prisma.taskInstance.findMany({
       where: { dueDate: { gte: toDbDate(addDays(TODAY, -29)) } },
     });
-    for (const instance of recent) await completeInstance(prisma, instance.id, admin());
+    for (const instance of recent) await completeInstance(prisma, instance.id, admin(), LATE);
     await sweepMissed(prisma, TODAY, 2);
 
     const report = await buildOrgReport(prisma, fixture.orgId, buildWindow({ days: 30 }, TODAY));

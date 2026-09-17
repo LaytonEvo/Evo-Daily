@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createTemplate, databaseAvailable, prisma, seedFixture, type Fixture } from "./helpers/db";
 import { generateInstances, sweepMissed } from "@/lib/recurrence";
 import { completeInstance } from "@/lib/instances";
+
+// These fixtures backfill history, so every completion is a late one and
+// carries the reason the service now requires.
+const LATE = { note: "Backfilled history" };
 import {
   afternoonNudge,
   managerDigest,
@@ -78,7 +82,7 @@ describeDb("nudges", () => {
     await generateInstances(prisma, TODAY, TODAY);
 
     const instance = await prisma.taskInstance.findFirstOrThrow({});
-    await completeInstance(prisma, instance.id, admin());
+    await completeInstance(prisma, instance.id, admin(), LATE);
 
     const result = await morningBrief(prisma, { today: TODAY, dryRun: true });
     expect(result.messages).toHaveLength(0);

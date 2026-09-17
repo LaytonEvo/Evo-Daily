@@ -252,7 +252,7 @@ describeDb("editing a template", () => {
       id: fixture.adminId,
       role: Role.ADMIN,
       organisationId: fixture.orgId,
-    }, { now: NOON });
+    }, { note: "Done ahead of time", now: NOON });
 
     await regenerateFutureInstances(prisma, template.id, TODAY, 5);
 
@@ -321,7 +321,7 @@ describeDb("the sweep", () => {
       id: fixture.memberId,
       role: Role.MEMBER,
       organisationId: fixture.orgId,
-    }, { now: NOON });
+    }, { note: "Caught up this morning", now: NOON });
     expect(completed.status).toBe(InstanceStatus.COMPLETED);
     // Completed after its cut-off, so the metric still records it as late.
     expect(completed.wasLate).toBe(true);
@@ -373,7 +373,7 @@ describeDb("the sweep", () => {
       id: fixture.adminId,
       role: Role.ADMIN,
       organisationId: fixture.orgId,
-    }, { now: NOON });
+    }, { note: "Confirmed done late", now: NOON });
     await sweepMissed(prisma, TODAY, 2);
 
     const after = await prisma.taskInstance.findUniqueOrThrow({ where: { id: instance.id } });
@@ -465,7 +465,10 @@ describeDb("status transitions", () => {
     const instance = await makeInstance(addDays(TODAY, -5));
     await sweepMissed(prisma, TODAY, 2);
 
-    const completed = await completeInstance(prisma, instance.id, admin(), { now: NOON });
+    const completed = await completeInstance(prisma, instance.id, admin(), {
+      note: "Confirmed with Marek that it was done",
+      now: NOON,
+    });
     expect(completed.status).toBe(InstanceStatus.COMPLETED);
 
     const audits = await prisma.auditLog.findMany({ where: { instanceId: instance.id } });
@@ -478,7 +481,7 @@ describeDb("status transitions", () => {
 
   it("stops a member unticking outside the grace window, but not an admin", async () => {
     const instance = await makeInstance(addDays(TODAY, -5));
-    await completeInstance(prisma, instance.id, admin(), { now: NOON });
+    await completeInstance(prisma, instance.id, admin(), { note: "Late sign-off", now: NOON });
 
     await expect(uncompleteInstance(prisma, instance.id, member(), { now: NOON })).rejects.toThrow(
       /grace period/i,
