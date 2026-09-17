@@ -105,7 +105,7 @@ export function AbsenceEditor({
                   type="button"
                   aria-label={`Remove time off for ${row.user.name}`}
                   onClick={() => void remove(row)}
-                  className="ml-auto text-muted-foreground hover:text-destructive"
+                  className="-my-2 -mr-1 ml-auto flex h-10 w-10 shrink-0 items-center justify-center text-muted-foreground hover:text-destructive"
                 >
                   <X className="h-4 w-4" />
                 </button>

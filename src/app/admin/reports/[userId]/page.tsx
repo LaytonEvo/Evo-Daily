@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Download } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireAdminPage } from "@/lib/guards";
 import { AppShell } from "@/components/app-shell";
 import { HistoryTable } from "./history-table";
+import { ExportLink } from "../reports-screen";
 import { storageEnabled } from "@/lib/storage";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,7 +46,7 @@ export default async function PersonReportPage({
       <main className="mx-auto w-full max-w-4xl pb-16 pt-2">
         <Link
           href={`/admin/reports?${queryString}`}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+          className="-ml-2 mb-2 inline-flex h-10 items-center gap-1.5 px-2 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
           All reports
@@ -66,13 +67,9 @@ export default async function PersonReportPage({
               {formatDateOnly(window.to, { withYear: true })}
             </p>
           </div>
-          <a
+          <ExportLink
             href={`/api/admin/reports/export?panel=person&userId=${userId}&${queryString}`}
-            className="inline-flex items-center gap-1.5 rounded-md border border-input bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-accent"
-          >
-            <Download className="h-3.5 w-3.5" />
-            CSV
-          </a>
+          />
         </div>
 
         <section className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -117,8 +114,13 @@ export default async function PersonReportPage({
               ) : (
                 <ul className="flex flex-col divide-y">
                   {report.missed.map((item) => (
-                    <li key={item.id} className="flex items-center justify-between gap-3 py-2.5">
-                      <span className="min-w-0 truncate text-sm font-medium">{item.title}</span>
+                    <li
+                      key={item.id}
+                      className="flex flex-col gap-0.5 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                    >
+                      {/* Stacked on a phone: side by side, the title truncates
+                          to a couple of words and stops being identifiable. */}
+                      <span className="min-w-0 text-sm font-medium sm:truncate">{item.title}</span>
                       <span className="shrink-0 text-xs text-muted-foreground">
                         {item.categoryName ? `${item.categoryName} · ` : ""}
                         {formatDateOnly(item.dueDate)}

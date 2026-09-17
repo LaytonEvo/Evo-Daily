@@ -81,7 +81,7 @@ export function UsersScreen({
                 <th className="hidden px-2 py-2.5 sm:px-3 font-medium sm:table-cell">Email</th>
                 <th className="px-2 py-2.5 sm:px-3 font-medium">Role</th>
                 <th className="hidden px-2 py-2.5 sm:px-3 text-right font-medium sm:table-cell">Active tasks</th>
-                <th className="px-2 py-2.5 sm:px-3 font-medium">Status</th>
+                <th className="hidden px-2 py-2.5 font-medium sm:table-cell sm:px-3">Status</th>
                 <th className="w-12 px-2 py-2.5 sm:w-20 sm:px-3" />
               </tr>
             </thead>
@@ -94,13 +94,18 @@ export function UsersScreen({
                   <td className="max-w-[42vw] px-2 py-2.5 sm:max-w-none sm:px-3">
                     <Link
                       href={`/admin/reports/${person.id}`}
-                      className="block max-w-[46vw] truncate font-medium hover:underline sm:max-w-none"
+                      className="-my-1.5 block max-w-[46vw] truncate py-1.5 font-medium hover:underline sm:max-w-none"
                     >
                       {person.name}
                     </Link>
                     <span className="block max-w-[46vw] truncate text-xs font-normal text-muted-foreground sm:hidden">
                       {person.email}
                     </span>
+                    {!person.isActive ? (
+                      <Badge variant="muted" className="mt-1 sm:hidden">
+                        Deactivated
+                      </Badge>
+                    ) : null}
                     {person.mustChangePassword ? (
                       <Badge variant="muted" className="mt-1 sm:ml-2 sm:mt-0">
                         <span className="sm:hidden">no password</span>
@@ -117,7 +122,7 @@ export function UsersScreen({
                   <td className="hidden px-2 py-2.5 sm:px-3 text-right tabular-nums sm:table-cell">
                     {person.activeTasks}
                   </td>
-                  <td className="px-2 py-2.5 sm:px-3">
+                  <td className="hidden px-2 py-2.5 sm:table-cell sm:px-3">
                     {person.isActive ? (
                       <Badge variant="success">Active</Badge>
                     ) : (

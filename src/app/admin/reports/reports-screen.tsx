@@ -212,12 +212,12 @@ function Leaderboard({
     return copy;
   }, [rows, sort, ascending, people]);
 
-  function header(key: SortKey, label: string, className?: string) {
+  function header(key: SortKey, label: React.ReactNode, className?: string) {
     return (
       <th className={cn("px-2 py-2.5 sm:px-3 font-medium", className)}>
         <button
           type="button"
-          className="inline-flex items-center gap-1 hover:text-foreground"
+          className="-my-2.5 inline-flex items-center gap-1 py-2.5 hover:text-foreground"
           onClick={() => {
             if (sort === key) setAscending((v) => !v);
             else {
@@ -253,7 +253,11 @@ function Leaderboard({
                 {header("assigned", "Assigned", "hidden text-right sm:table-cell")}
                 {header("completed", "Completed", "text-right")}
                 {header("missed", "Missed", "text-right")}
-                {header("completionRate", "Completion", "text-right")}
+                {header(
+                  "completionRate",
+                  <ShortLabel short="Rate" full="Completion" />,
+                  "text-right",
+                )}
                 {header("onTimeRate", "On time", "hidden text-right sm:table-cell")}
               </tr>
             </thead>
@@ -263,7 +267,7 @@ function Leaderboard({
                   <td className="px-2 py-2.5 sm:px-3">
                     <Link
                       href={`/admin/reports/${row.userId}?${query}`}
-                      className="font-medium hover:underline"
+                      className="-my-1 inline-block py-1 font-medium hover:underline"
                     >
                       {row.name}
                     </Link>
@@ -344,7 +348,9 @@ function ProblemTasks({ report, query }: { report: OrgReport; query: string }) {
                 <th className="hidden px-2 py-2.5 font-medium sm:table-cell sm:px-3">Schedule</th>
                 <th className="px-2 py-2.5 sm:px-3 text-right font-medium">Due</th>
                 <th className="px-2 py-2.5 sm:px-3 text-right font-medium">Missed</th>
-                <th className="px-2 py-2.5 sm:px-3 text-right font-medium">Completion</th>
+                <th className="px-2 py-2.5 sm:px-3 text-right font-medium">
+                  <ShortLabel short="Rate" full="Completion" />
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -469,11 +475,25 @@ export function RateBar({ rate }: { rate: number | null }) {
   );
 }
 
-function ExportLink({ href, label = "CSV" }: { href: string; label?: string }) {
+/**
+ * A phone column has room for the number or for the word, not both. The bar and
+ * the figure under this heading say what it means; the heading only has to
+ * label them.
+ */
+function ShortLabel({ short, full }: { short: string; full: string }) {
+  return (
+    <>
+      <span className="sm:hidden">{short}</span>
+      <span className="hidden sm:inline">{full}</span>
+    </>
+  );
+}
+
+export function ExportLink({ href, label = "CSV" }: { href: string; label?: string }) {
   return (
     <a
       href={href}
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-input bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-accent"
+      className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md border border-input bg-card px-3 text-xs font-medium hover:bg-accent sm:h-8"
     >
       <Download className="h-3.5 w-3.5" />
       {label}

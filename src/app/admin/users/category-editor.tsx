@@ -153,12 +153,14 @@ export function CategoryEditor({ categories }: { categories: Category[] }) {
                   }
                   className={cn(
                     "relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-50",
+                    // 20px of track, 40px of hit area, same footprint.
+                    "before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']",
                     category.isActive ? "bg-primary" : "bg-input",
                   )}
                 >
                   <span
                     className={cn(
-                      "absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform duration-150",
+                      "absolute left-0 top-0.5 h-4 w-4 rounded-full bg-white transition-transform duration-150",
                       category.isActive ? "translate-x-[18px]" : "translate-x-0.5",
                     )}
                   />

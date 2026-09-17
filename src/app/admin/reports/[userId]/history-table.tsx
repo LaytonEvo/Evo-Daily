@@ -66,7 +66,22 @@ export function HistoryTable({
   }
 
   return (
-    <div className="overflow-x-auto">
+    <>
+      {/* A phone cannot hold five columns without breaking titles onto one
+          word per line, so below sm each row becomes a card instead. */}
+      <ul className="flex flex-col gap-2 px-3 sm:hidden">
+        {shown.map((row) => (
+          <HistoryCard
+            key={row.id}
+            row={row}
+            expanded={open === row.id}
+            onToggle={() => setOpen(open === row.id ? null : row.id)}
+            attachmentsEnabled={attachmentsEnabled}
+          />
+        ))}
+      </ul>
+
+      <div className="hidden overflow-x-auto sm:block">
       <table className="w-full text-sm sm:min-w-[600px]">
         <thead className="border-y bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
           <tr>
@@ -93,7 +108,77 @@ export function HistoryTable({
           })}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
+  );
+}
+
+/** One instance on a phone. The same actions, stacked rather than columned. */
+function HistoryCard({
+  row,
+  expanded,
+  onToggle,
+  attachmentsEnabled,
+}: {
+  row: HistoryRow;
+  expanded: boolean;
+  onToggle: () => void;
+  attachmentsEnabled: boolean;
+}) {
+  const completed =
+    row.completedAt instanceof Date
+      ? row.completedAt
+      : row.completedAt
+        ? new Date(row.completedAt)
+        : null;
+
+  return (
+    <li className="rounded-xl border bg-card">
+      <div className="flex flex-col gap-2 p-3">
+        <div className="flex items-start justify-between gap-2">
+          <p className="min-w-0 flex-1 text-sm font-semibold leading-snug">{row.title}</p>
+          <StatusBadge status={row.status} wasLate={row.wasLate} />
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Due {formatDateOnly(row.dueDate)}
+          {completed
+            ? ` · done ${formatDateOnly(completed.toISOString().slice(0, 10))} ${formatTimeLondon(completed)}`
+            : ""}
+        </p>
+
+        {row.note ? (
+          <p className="rounded-lg bg-muted/60 px-2 py-1.5 text-xs text-muted-foreground">
+            {row.note}
+          </p>
+        ) : null}
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-label={expanded ? `Hide comments on ${row.title}` : `Show comments on ${row.title}`}
+            onClick={onToggle}
+            className="flex h-9 items-center gap-1.5 rounded-lg bg-muted px-3 text-xs font-medium text-muted-foreground"
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            {row.commentCount > 0 ? row.commentCount : "Comment"}
+            <ChevronDown
+              className={cn("h-4 w-4 transition-transform duration-150", expanded && "rotate-180")}
+            />
+          </button>
+          <span className="ml-auto">
+            <NotDoneButton instanceId={row.id} title={row.title} status={row.status} />
+          </span>
+        </div>
+      </div>
+
+      {expanded ? (
+        <div className="border-t px-3 pb-3">
+          <CommentThread instanceId={row.id} attachmentsEnabled={attachmentsEnabled} />
+        </div>
+      ) : null}
+    </li>
   );
 }
 

@@ -224,29 +224,37 @@ export function TemplatesScreen({
                     )}
                   >
                     <td className="px-1 py-2.5 sm:px-3">
-                      <input
-                        type="checkbox"
-                        aria-label={`Select ${template.title}`}
-                        className="h-4 w-4"
-                        checked={selected.has(template.id)}
-                        onChange={() => toggleSelected(template.id)}
-                      />
+                      {/* The box is 16px. The label around it is what a thumb
+                          actually hits; the negative margin keeps the row the
+                          same height it was. */}
+                      <label className="-mx-1 -my-2 flex h-10 w-[calc(100%+0.5rem)] cursor-pointer items-center justify-center">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${template.title}`}
+                          className="h-4 w-4"
+                          checked={selected.has(template.id)}
+                          onChange={() => toggleSelected(template.id)}
+                        />
+                      </label>
                     </td>
                     <td className="px-2 py-2.5 sm:px-3">
                       <button
                         type="button"
-                        className="text-left font-medium hover:underline"
+                        className="-my-1 py-1 text-left font-medium hover:underline"
                         onClick={() => setEditing(template)}
                       >
                         {template.title}
                       </button>
                       {template.dueTime ? (
-                        <span className="ml-2 text-xs text-muted-foreground">
+                        <span className="ml-2 hidden text-xs text-muted-foreground md:inline">
                           by {template.dueTime}
                         </span>
                       ) : null}
+                      {/* On a phone the deadline belongs on the detail line, not
+                          trailing the title where it breaks the wrap. */}
                       <span className="block max-w-[52vw] truncate text-xs text-muted-foreground md:hidden">
                         {template.assigneeName} · {template.scheduleLabel}
+                        {template.dueTime ? ` · by ${template.dueTime}` : ""}
                       </span>
                     </td>
                     <td className="hidden px-2 py-2.5 sm:px-3 text-muted-foreground md:table-cell">
@@ -292,12 +300,15 @@ export function TemplatesScreen({
                         }
                         className={cn(
                           "relative h-6 w-11 rounded-full transition-colors",
+                          // The track is 24px tall. The invisible pseudo-element
+                          // stretches the hit area to 40 without moving anything.
+                          "before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']",
                           template.isActive ? "bg-primary" : "bg-input",
                         )}
                       >
                         <span
                           className={cn(
-                            "absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-150",
+                            "absolute left-0 top-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-150",
                             template.isActive ? "translate-x-[22px]" : "translate-x-0.5",
                           )}
                         />
