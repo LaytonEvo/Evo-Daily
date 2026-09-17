@@ -8,10 +8,15 @@
  * the completion rate around.
  *
  * What goes is defined by matching the seed exactly: a task whose title is one
- * of the nineteen it creates, and an account whose email is one of the nine it
- * creates. Everything else stays, including the organisation, the categories,
- * the settings, and Layton's account — which the seed also creates but which
- * is the real admin.
+ * of the nineteen it creates, and an account carrying both the email and the
+ * invented name it gives. Everything else stays, including the organisation,
+ * the categories, the settings, and Layton's account — which the seed also
+ * creates but which is the real admin.
+ *
+ * The name has to match as well as the email because a seeded account that has
+ * been renamed is one somebody has taken over. Deleting a colleague on the
+ * strength of an email address the seed happened to use first is not a mistake
+ * worth risking, so those are reported and left alone.
  *
  * Anything it does not recognise is listed rather than assumed either way, so
  * a task added by hand can never be swept up as demo data.
@@ -53,17 +58,22 @@ const DEMO_TITLES = [
   "Photograph the new Ping stock for the website",
 ];
 
-/** The nine accounts prisma/seed.ts creates. */
-const DEMO_EMAILS = [
-  "layton@evolutiongolf.co.uk",
-  "luke@evolutiongolf.co.uk",
-  "karin@evolutiongolf.co.uk",
-  "sam@evolutiongolf.co.uk",
-  "priya@evolutiongolf.co.uk",
-  "dan@evolutiongolf.co.uk",
-  "chloe@evolutiongolf.co.uk",
-  "marek@evolutiongolf.co.uk",
-  "hannah@evolutiongolf.co.uk",
+/**
+ * The nine accounts prisma/seed.ts creates, with the invented names it gives
+ * them. Both have to match. An account still carrying its invented name has
+ * never been touched; one that has been renamed is one somebody is using, and
+ * the seed's email address is not evidence enough to delete a colleague.
+ */
+const DEMO_ACCOUNTS = [
+  { email: "layton@evolutiongolf.co.uk", name: "Layton Brooks" },
+  { email: "luke@evolutiongolf.co.uk", name: "Luke Harding" },
+  { email: "karin@evolutiongolf.co.uk", name: "Karin Vaughan" },
+  { email: "sam@evolutiongolf.co.uk", name: "Sam Whitfield" },
+  { email: "priya@evolutiongolf.co.uk", name: "Priya Raman" },
+  { email: "dan@evolutiongolf.co.uk", name: "Dan Okoye" },
+  { email: "chloe@evolutiongolf.co.uk", name: "Chloe Bennett" },
+  { email: "marek@evolutiongolf.co.uk", name: "Marek Nowak" },
+  { email: "hannah@evolutiongolf.co.uk", name: "Hannah Doyle" },
 ];
 
 /**
@@ -98,10 +108,20 @@ async function main() {
     select: { id: true, name: true, email: true, role: true },
     orderBy: { name: "asc" },
   });
-  const demoUsers = users.filter(
-    (u) => DEMO_EMAILS.includes(u.email) && !KEEP_EMAILS.includes(u.email),
-  );
+  const untouched = (u: { email: string; name: string }) =>
+    DEMO_ACCOUNTS.some((d) => d.email === u.email && d.name === u.name);
+
+  const demoUsers = users.filter((u) => untouched(u) && !KEEP_EMAILS.includes(u.email));
   const keptUsers = users.filter((u) => !demoUsers.some((d) => d.id === u.id));
+
+  // A seeded address under a new name. Reported loudly rather than deleted:
+  // renaming is what you do to an account you intend to keep.
+  const renamed = users.filter(
+    (u) =>
+      !untouched(u) &&
+      !KEEP_EMAILS.includes(u.email) &&
+      DEMO_ACCOUNTS.some((d) => d.email === u.email),
+  );
 
   if (!keptUsers.some((u) => u.role === Role.ADMIN)) {
     throw new Error("That would leave no admin. Nothing has been deleted.");
@@ -133,6 +153,14 @@ async function main() {
   for (const u of keptUsers) console.log(`    account  ${u.name} <${u.email}> ${u.role}`);
   console.log("");
   for (const t of keptTemplates) console.log(`    task     ${t.title} — ${t.assignee.name}`);
+
+  if (renamed.length > 0) {
+    console.log("\n  Seeded addresses that have been renamed, so left alone — check these:");
+    for (const u of renamed) {
+      const was = DEMO_ACCOUNTS.find((d) => d.email === u.email)!.name;
+      console.log(`    ${u.name} <${u.email}> — the seed called this one ${was}`);
+    }
+  }
 
   if (attachments > 0) {
     console.log(
