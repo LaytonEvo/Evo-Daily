@@ -4,6 +4,7 @@ import { useState } from "react";
 import { InstanceStatus } from "@prisma/client";
 import { Check, ChevronDown, Clock, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CommentThread } from "./comment-thread";
 import { cn } from "@/lib/utils";
 import type { MyDayTask } from "@/lib/my-day";
 
@@ -16,6 +17,7 @@ export function TaskRow({
   muted = false,
   busy = false,
   requiresReason = false,
+  attachmentsEnabled = false,
   trailing,
   onToggle,
   onSaveNote,
@@ -25,6 +27,7 @@ export function TaskRow({
   busy?: boolean;
   /** Late tasks cannot be ticked without saying what held them up. */
   requiresReason?: boolean;
+  attachmentsEnabled?: boolean;
   trailing?: React.ReactNode;
   onToggle: (done: boolean, note?: string | null) => void;
   onSaveNote: (note: string | null) => void;
@@ -212,6 +215,9 @@ export function TaskRow({
               className="mt-1 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
+
+          {/* Mounted only while open, so a day of rows is not a day of fetches. */}
+          <CommentThread instanceId={task.id} attachmentsEnabled={attachmentsEnabled} />
         </div>
       ) : null}
 

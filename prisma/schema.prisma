@@ -19,11 +19,13 @@ model Organisation {
   timezone  String   @default("Europe/London")
   createdAt DateTime @default(now())
 
-  users      User[]
-  categories Category[]
-  templates  TaskTemplate[]
-  instances  TaskInstance[]
-  settings   Settings?
+  users       User[]
+  categories  Category[]
+  templates   TaskTemplate[]
+  instances   TaskInstance[]
+  settings    Settings?
+  comments    Comment[]
+  attachments Attachment[]
 }
 
 model User {
@@ -48,6 +50,8 @@ model User {
   assignedInstances  TaskInstance[] @relation("InstanceAssignee")
   completedInstances TaskInstance[] @relation("InstanceCompleter")
   auditLogs          AuditLog[]
+  comments           Comment[]
+  attachments        Attachment[]
 
   @@index([organisationId, isActive])
 }
@@ -138,6 +142,7 @@ model TaskInstance {
   completedBy  User?        @relation("InstanceCompleter", fields: [completedById], references: [id])
   category     Category?    @relation(fields: [categoryId], references: [id])
   auditLogs    AuditLog[]
+  comments     Comment[]
 
   @@unique([templateId, dueDate]) // idempotency guarantee — critical
   @@index([assigneeId, dueDate])
@@ -181,4 +186,48 @@ model Settings {
   generationHorizonDays Int    @default(14)
 
   organisation Organisation @relation(fields: [organisationId], references: [id])
+}
+
+/// A comment on one dated occurrence of a task, not on the recurring rule.
+/// The rule is a template and lives forever; what went wrong on Tuesday
+/// belongs to Tuesday.
+model Comment {
+  id             String   @id @default(cuid())
+  organisationId String
+  instanceId     String
+  authorId       String
+  body           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  instance     TaskInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  author       User         @relation(fields: [authorId], references: [id])
+  attachments  Attachment[]
+
+  @@index([instanceId, createdAt])
+}
+
+/// A file on a comment. The bytes live in object storage; this row is the
+/// record of them, so a listing never has to touch the bucket.
+///
+/// `storageKey` is written by the server, never supplied by the client — a
+/// client-chosen key is a path-traversal hole and a way to read someone
+/// else's file.
+model Attachment {
+  id             String   @id @default(cuid())
+  organisationId String
+  commentId      String
+  storageKey     String   @unique
+  filename       String
+  contentType    String
+  bytes          Int
+  uploadedById   String
+  createdAt      DateTime @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  comment      Comment      @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  uploadedBy   User         @relation(fields: [uploadedById], references: [id])
+
+  @@index([commentId])
 }

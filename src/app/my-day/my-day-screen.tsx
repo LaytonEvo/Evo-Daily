@@ -15,10 +15,12 @@ export function MyDayScreen({
   user,
   day,
   notice,
+  attachmentsEnabled,
 }: {
   user: { name: string };
   day: MyDay;
   notice: string | null;
+  attachmentsEnabled: boolean;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -173,6 +175,7 @@ export function MyDayScreen({
                 key={task.id}
                 task={task}
                 busy={pendingIds.has(task.id)}
+                attachmentsEnabled={attachmentsEnabled}
                 requiresReason
                 onToggle={(done, note) => setDone(task, done, note)}
                 onSaveNote={(note) => saveNote(task, note)}
@@ -192,6 +195,7 @@ export function MyDayScreen({
                   key={task.id}
                   task={task}
                   busy={pendingIds.has(task.id)}
+                  attachmentsEnabled={attachmentsEnabled}
                   onToggle={(done, note) => setDone(task, done, note)}
                   onSaveNote={(note) => saveNote(task, note)}
                 />
@@ -209,6 +213,7 @@ export function MyDayScreen({
                   key={task.id}
                   task={task}
                   busy={pendingIds.has(task.id)}
+                  attachmentsEnabled={attachmentsEnabled}
                   onToggle={(done, note) => setDone(task, done, note)}
                   onSaveNote={(note) => saveNote(task, note)}
                 />

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/guards";
 import { ensureInstancesForToday, getMyDay } from "@/lib/my-day";
 import { AppShell } from "@/components/app-shell";
+import { storageEnabled } from "@/lib/storage";
 import { MyDayScreen } from "./my-day-screen";
 
 export const metadata = { title: "My day · EvoTasks" };
@@ -29,6 +30,7 @@ export default async function MyDayPage({
         user={{ name: user.name }}
         day={day}
         notice={denied === "admin" ? "That area is for admins only." : null}
+        attachmentsEnabled={storageEnabled()}
       />
     </AppShell>
   );
