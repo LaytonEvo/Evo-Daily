@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { errorResponse, requireApiAdmin } from "@/lib/guards";
 import {
+  deleteTemplate,
   duplicateTemplate,
   setTemplateActive,
   templateInputSchema,
@@ -28,7 +29,7 @@ const patchSchema = z.object({
   duplicate: z.literal(true).optional(),
 });
 
-/** Toggle active, or duplicate. Templates are never hard-deleted. */
+/** Toggle active, or duplicate. */
 export async function PATCH(request: Request, { params }: Params) {
   try {
     const admin = await requireApiAdmin();
@@ -51,6 +52,18 @@ export async function PATCH(request: Request, { params }: Params) {
     }
 
     return NextResponse.json({ error: "Nothing to change" }, { status: 400 });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
+/** Only for a task with no record. Anything else comes back 409. */
+export async function DELETE(_request: Request, { params }: Params) {
+  try {
+    const admin = await requireApiAdmin();
+    const { id } = await params;
+    const template = await deleteTemplate(prisma, admin.organisationId, id);
+    return NextResponse.json({ id: template.id, deleted: true });
   } catch (error) {
     return errorResponse(error);
   }

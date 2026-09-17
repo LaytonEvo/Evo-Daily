@@ -1,3 +1,4 @@
+import { InstanceStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireAdminPage } from "@/lib/guards";
 import { AppShell } from "@/components/app-shell";
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function TemplatesPage() {
   const admin = await requireAdminPage();
 
-  const [templates, users, categories, rates] = await Promise.all([
+  const [templates, users, categories, rates, recorded] = await Promise.all([
     prisma.taskTemplate.findMany({
       where: { organisationId: admin.organisationId },
       include: { assignee: { select: { id: true, name: true } } },
@@ -28,7 +29,19 @@ export default async function TemplatesPage() {
       orderBy: { sortOrder: "asc" },
     }),
     templateCompletionRates(prisma, admin.organisationId, 30),
+    // All time, not the 30-day window: a task completed once last year is
+    // still a record, and deleting it would still rewrite that month.
+    prisma.taskInstance.groupBy({
+      by: ["templateId"],
+      where: {
+        template: { organisationId: admin.organisationId },
+        status: { not: InstanceStatus.PENDING },
+      },
+      _count: { _all: true },
+    }),
   ]);
+
+  const recordedDays = new Map(recorded.map((r) => [r.templateId, r._count._all]));
 
   const rows: TemplateRow[] = templates.map((template) => {
     const totals = rates.get(template.id);
@@ -50,6 +63,7 @@ export default async function TemplatesPage() {
       scheduleLabel: describeSchedule(template),
       completionRate: totals?.completionRate ?? null,
       assignedLast30: totals?.assigned ?? 0,
+      recordedDays: recordedDays.get(template.id) ?? 0,
     };
   });
 

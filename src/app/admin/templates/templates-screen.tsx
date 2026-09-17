@@ -29,6 +29,8 @@ export type TemplateRow = {
   scheduleLabel: string;
   completionRate: number | null;
   assignedLast30: number;
+  /** Days completed, missed or excused, all time. Nonzero means no deleting. */
+  recordedDays: number;
 };
 
 export type Person = { id: string; name: string; isActive: boolean };

@@ -7,10 +7,11 @@
  *  - Editing changes future instances only. PENDING instances dated after
  *    today are rebuilt; anything due today or earlier is never touched.
  *  - Deactivating drops future PENDING instances and leaves history intact.
- *  - Templates are never hard-deleted.
+ *  - Deleting is only for a task nothing has happened to yet. Anything with a
+ *    record is deactivated instead, so no report is ever rewritten.
  */
 
-import { Frequency, type PrismaClient } from "@prisma/client";
+import { Frequency, InstanceStatus, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import {
   DEFAULT_DAYS_OF_WEEK,
@@ -209,6 +210,57 @@ export async function setTemplateActive(
   }
 
   return template;
+}
+
+/**
+ * Remove a task outright, but only while nothing has happened to it. A task
+ * that has ever been completed, missed, excused or commented on is a record,
+ * and deleting it would quietly rewrite every report that counted it — a
+ * completion rate that changes when someone tidies up is not a completion
+ * rate. Those are deactivated instead, and the error says so.
+ *
+ * Unstarted future instances are not a record and go with it, along with the
+ * cover rows on any booked absence. This is the accidental duplicate, the
+ * draft, the task typed in twice.
+ */
+export async function deleteTemplate(
+  db: PrismaClient,
+  organisationId: string,
+  templateId: string,
+) {
+  const existing = await db.taskTemplate.findFirst({
+    where: { id: templateId, organisationId },
+    select: { id: true, title: true },
+  });
+  if (!existing) throw new ApiError("Task not found", 404);
+
+  const [recorded, comments] = await Promise.all([
+    db.taskInstance.count({
+      where: { templateId, status: { not: InstanceStatus.PENDING } },
+    }),
+    db.comment.count({ where: { instance: { templateId } } }),
+  ]);
+
+  if (recorded > 0 || comments > 0) {
+    throw new ApiError(
+      `"${existing.title}" has ${describeRecord(recorded, comments)}. Turn it off instead — ` +
+        `it will stop generating, and past reports will still read correctly.`,
+      409,
+    );
+  }
+
+  // Audit rows and comment rows cascade from the instances; absence cover rows
+  // cascade from the template itself.
+  await db.taskInstance.deleteMany({ where: { templateId } });
+  await db.taskTemplate.delete({ where: { id: templateId } });
+  return existing;
+}
+
+function describeRecord(recorded: number, comments: number): string {
+  const parts: string[] = [];
+  if (recorded > 0) parts.push(`${recorded} day${recorded === 1 ? "" : "s"} on the record`);
+  if (comments > 0) parts.push(`${comments} comment${comments === 1 ? "" : "s"}`);
+  return parts.join(" and ");
 }
 
 export async function duplicateTemplate(

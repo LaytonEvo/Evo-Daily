@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Frequency } from "@prisma/client";
-import { X } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
@@ -60,6 +60,13 @@ export function TemplateDrawer({
   const [preview, setPreview] = useState<{ description: string; labels: string[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  // A task nothing has happened to yet can go; anything with a day on the
+  // record is history and the server refuses it. Saying so before the click
+  // beats an error afterwards.
+  const recorded = template?.recordedDays ?? 0;
+  const deletable = Boolean(template) && recorded === 0;
 
   // Live preview: "Next 3 due dates: Thu 28 Aug, Fri 29 Aug, Mon 1 Sep."
   useEffect(() => {
@@ -136,6 +143,26 @@ export function TemplateDrawer({
     }
 
     toast(template ? "Saved. Future instances updated." : "Task created.");
+    onSaved();
+  }
+
+  async function onDelete() {
+    if (!template) return;
+    setError(null);
+    setPending(true);
+
+    const response = await fetch(`/api/admin/templates/${template.id}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      setError(payload.error ?? "Could not delete that task.");
+      setPending(false);
+      setConfirmingDelete(false);
+      return;
+    }
+
+    toast(`${template.title} deleted.`);
     onSaved();
   }
 
@@ -370,6 +397,16 @@ export function TemplateDrawer({
                 </p>
               ) : null}
 
+              {/* A disabled bin with only a tooltip to explain it is a dead end
+                  on a phone, where there is no hover. */}
+              {template && !deletable ? (
+                <p className="text-xs text-muted-foreground">
+                  {recorded === 1 ? "One day is" : `${recorded} days are`} already on the record,
+                  so this one can be turned off but not deleted — deleting it would change every
+                  report that counted it.
+                </p>
+              ) : null}
+
               {error ? (
                 <p role="alert" className="text-sm text-destructive">
                   {error}
@@ -378,13 +415,60 @@ export function TemplateDrawer({
             </div>
           </div>
 
-          <div className="flex gap-2 border-t px-4 py-3 safe-bottom">
-            <Button type="submit" className="flex-1" disabled={pending}>
-              {pending ? "Saving…" : template ? "Save changes" : "Create task"}
-            </Button>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
+          <div className="border-t safe-bottom">
+            {confirmingDelete ? (
+              <div className="bg-destructive/5 px-4 py-3 animate-fade-in">
+                <p className="text-sm font-medium">
+                  Delete {template?.title}? This cannot be undone.
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    disabled={pending}
+                    onClick={() => void onDelete()}
+                  >
+                    {pending ? "Deleting…" : "Delete"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setConfirmingDelete(false)}
+                  >
+                    Keep it
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="flex gap-2 px-4 py-3">
+              {template ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Delete ${template.title}`}
+                  disabled={pending || !deletable || confirmingDelete}
+                  title={
+                    deletable
+                      ? `Delete ${template.title}`
+                      : `${recorded} ${recorded === 1 ? "day is" : "days are"} on the record — turn it off instead`
+                  }
+                  onClick={() => setConfirmingDelete(true)}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              ) : null}
+              <Button type="submit" className="flex-1" disabled={pending}>
+                {pending ? "Saving…" : template ? "Save changes" : "Create task"}
+              </Button>
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+            </div>
           </div>
         </form>
       </div>
