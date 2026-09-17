@@ -410,6 +410,7 @@ export type PersonReport = {
     completedAt: Date | null;
     note: string | null;
     categoryName: string | null;
+    commentCount: number;
   }[];
 };
 
@@ -443,6 +444,8 @@ export async function buildPersonReport(
       assigneeId: true,
       templateId: true,
       category: { select: { name: true, colour: true } },
+      // Just the count: the thread itself is fetched when a row is opened.
+      _count: { select: { comments: true } },
     },
     orderBy: [{ dueDate: "desc" }, { title: "asc" }],
   });
@@ -479,6 +482,7 @@ export async function buildPersonReport(
       completedAt: r.completedAt,
       note: r.note,
       categoryName: r.category?.name ?? null,
+      commentCount: r._count.comments,
     })),
   };
 }

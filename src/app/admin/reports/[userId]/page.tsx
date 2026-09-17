@@ -1,15 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { InstanceStatus } from "@prisma/client";
 import { ArrowLeft, Download } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireAdminPage } from "@/lib/guards";
 import { AppShell } from "@/components/app-shell";
-import { NotDoneButton } from "./not-done-button";
+import { HistoryTable } from "./history-table";
+import { storageEnabled } from "@/lib/storage";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { buildPersonReport, buildWindow } from "@/lib/reports";
-import { formatDateOnly, formatTimeLondon } from "@/lib/time";
+import { formatDateOnly } from "@/lib/time";
 import { cn, formatRate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -162,48 +162,7 @@ export default async function PersonReportPage({
               <CardDescription>{report.history.length} instances in this window.</CardDescription>
             </CardHeader>
             <CardContent className="px-0 sm:px-0">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[600px] text-sm">
-                  <thead className="border-y bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                    <tr>
-                      <th className="px-3 py-2.5 font-medium">Due</th>
-                      <th className="px-3 py-2.5 font-medium">Task</th>
-                      <th className="px-3 py-2.5 font-medium">Status</th>
-                      <th className="px-3 py-2.5 font-medium">Completed</th>
-                      <th className="px-3 py-2.5 font-medium">Note</th>
-                      <th className="w-24 px-3 py-2.5" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.history.map((row) => (
-                      <tr key={row.id} className="border-b last:border-0">
-                        <td className="whitespace-nowrap px-3 py-2.5 text-muted-foreground">
-                          {formatDateOnly(row.dueDate)}
-                        </td>
-                        <td className="px-3 py-2.5 font-medium">{row.title}</td>
-                        <td className="px-3 py-2.5">
-                          <StatusBadge status={row.status} wasLate={row.wasLate} />
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-2.5 text-muted-foreground">
-                          {row.completedAt
-                            ? `${formatDateOnly(row.completedAt.toISOString().slice(0, 10))} ${formatTimeLondon(row.completedAt)}`
-                            : "—"}
-                        </td>
-                        <td className="max-w-[220px] truncate px-3 py-2.5 text-muted-foreground">
-                          {row.note ?? ""}
-                        </td>
-                        <td className="px-3 py-2.5 text-right">
-                          <NotDoneButton
-                            instanceId={row.id}
-                            title={row.title}
-                            status={row.status}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <HistoryTable rows={report.history} attachmentsEnabled={storageEnabled()} />
             </CardContent>
           </Card>
         </div>
@@ -240,10 +199,3 @@ function Stat({
   );
 }
 
-function StatusBadge({ status, wasLate }: { status: InstanceStatus; wasLate: boolean }) {
-  if (status === InstanceStatus.COMPLETED) {
-    return wasLate ? <Badge variant="warning">Completed late</Badge> : <Badge variant="success">Completed</Badge>;
-  }
-  if (status === InstanceStatus.MISSED) return <Badge variant="destructive">Missed</Badge>;
-  return <Badge variant="muted">Open</Badge>;
-}
