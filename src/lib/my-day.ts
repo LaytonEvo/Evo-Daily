@@ -2,7 +2,7 @@
  * The data behind /my-day.
  *
  * A member should be able to clear their day in under 60 seconds on a phone,
- * so this returns exactly the five sections the screen renders and nothing
+ * so this returns exactly the three sections the screen renders and nothing
  * else — no counts to compute client-side, no second round trip.
  */
 
@@ -13,8 +13,6 @@ import { daysLate } from "./instances";
 import {
   addDays,
   compareDateOnly,
-  endOfMonthLondon,
-  endOfWeekLondon,
   formatTimeLondon,
   toDateOnly,
   toDbDate,
@@ -42,8 +40,6 @@ export type MyDay = {
   today: DateOnly;
   overdue: MyDayTask[];
   dueToday: MyDayTask[];
-  thisWeek: MyDayTask[];
-  thisMonth: MyDayTask[];
   doneToday: MyDayTask[];
   /** Progress ring: everything owed today, and how much of it is cleared. */
   owedTotal: number;
@@ -70,11 +66,11 @@ export async function getMyDay(
 ): Promise<MyDay> {
   const { graceDays } = await getSettings(db, user.organisationId);
 
-  // Look back only as far as a member can still act, and forward to the end
-  // of the month — anything beyond that is not this screen's business.
+  // Today, and back only as far as a member can still act on. Nothing ahead:
+  // the screen is what you owe now, and a list of work that is not yet due
+  // reads as a backlog you are already behind on.
   const from = addDays(today, -graceDays);
-  const to = endOfMonthLondon(today);
-  const weekEnd = endOfWeekLondon(today);
+  const to = today;
 
   const rows = await db.taskInstance.findMany({
     where: {
@@ -116,19 +112,15 @@ export async function getMyDay(
 
   const overdue = open.filter((t) => compareDateOnly(t.dueDate, today) < 0);
   const dueToday = open.filter((t) => t.dueDate === today);
-  const thisWeek = open.filter(
-    (t) => compareDateOnly(t.dueDate, today) > 0 && compareDateOnly(t.dueDate, weekEnd) <= 0,
-  );
-  const thisMonth = open.filter((t) => compareDateOnly(t.dueDate, weekEnd) > 0);
 
-  // Done today shows what has been cleared from what was owed — today's work
-  // and any catch-up on an overdue item.
-  const doneToday = done.filter((t) => compareDateOnly(t.dueDate, today) <= 0);
+  // Everything cleared from what was owed — today's work, and any catch-up on
+  // an overdue item.
+  const doneToday = done;
 
   const owedTotal = overdue.length + dueToday.length + doneToday.length;
   const owedDone = doneToday.length;
 
-  return { today, overdue, dueToday, thisWeek, thisMonth, doneToday, owedTotal, owedDone };
+  return { today, overdue, dueToday, doneToday, owedTotal, owedDone };
 }
 
 function isEndOfDay(instant: Date): boolean {

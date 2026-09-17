@@ -6,7 +6,7 @@ import { InstanceStatus } from "@prisma/client";
 import { ProgressRing } from "@/components/progress-ring";
 import { useToast } from "@/components/ui/toast";
 import type { MyDay, MyDayTask } from "@/lib/my-day";
-import { formatDateOnly, formatDateOnlyLong, dayName, isoWeekday } from "@/lib/time";
+import { formatDateOnlyLong } from "@/lib/time";
 import { TaskRow } from "./task-row";
 import { Section } from "./section";
 
@@ -169,42 +169,6 @@ export function MyDayScreen({
           ))}
         </Section>
 
-        <Section title="This week" tone="muted" count={sections.thisWeek.length}>
-          {sections.thisWeek.map((task) => (
-            <TaskRow
-              key={task.id}
-              task={task}
-              muted
-              busy={pendingIds.has(task.id)}
-              onToggle={(done, note) => setDone(task, done, note)}
-              onSaveNote={(note) => saveNote(task, note)}
-              trailing={
-                <span className="text-xs font-medium text-muted-foreground">
-                  {dayName(isoWeekday(task.dueDate))}
-                </span>
-              }
-            />
-          ))}
-        </Section>
-
-        <Section title="This month" tone="muted" count={sections.thisMonth.length}>
-          {sections.thisMonth.map((task) => (
-            <TaskRow
-              key={task.id}
-              task={task}
-              muted
-              busy={pendingIds.has(task.id)}
-              onToggle={(done, note) => setDone(task, done, note)}
-              onSaveNote={(note) => saveNote(task, note)}
-              trailing={
-                <span className="text-xs font-medium text-muted-foreground">
-                  {formatDateOnly(task.dueDate)}
-                </span>
-              }
-            />
-          ))}
-        </Section>
-
         <Section
           title="Done today"
           tone="success"
@@ -236,7 +200,7 @@ function greeting(now: Date = new Date()): string {
 }
 
 function collectTasks(day: MyDay): MyDayTask[] {
-  return [...day.overdue, ...day.dueToday, ...day.thisWeek, ...day.thisMonth, ...day.doneToday];
+  return [...day.overdue, ...day.dueToday, ...day.doneToday];
 }
 
 /**
@@ -259,10 +223,6 @@ function splitIntoSections(tasks: MyDayTask[], day: MyDay) {
     dueToday: owed.filter(
       (t) => t.status === InstanceStatus.PENDING && t.dueDate === day.today,
     ),
-    thisWeek: pick(day.thisWeek).filter((t) => t.status === InstanceStatus.PENDING),
-    thisMonth: pick(day.thisMonth).filter((t) => t.status === InstanceStatus.PENDING),
-    doneToday: [...owed, ...pick(day.thisWeek), ...pick(day.thisMonth)].filter(
-      (t) => t.status === InstanceStatus.COMPLETED,
-    ),
+    doneToday: owed.filter((t) => t.status === InstanceStatus.COMPLETED),
   };
 }

@@ -9,6 +9,7 @@ import {
   type Fixture,
 } from "./helpers/db";
 import { generateInstances } from "@/lib/recurrence";
+import { todayInLondon } from "@/lib/time";
 import type { Intent } from "@/lib/claude";
 
 // Claude is stubbed: these tests are about what the app does with an intent,
@@ -27,7 +28,9 @@ const { handleMessage, completeFromButton, personForSlackUser } = await import(
 const available = await databaseAvailable();
 const describeDb = available ? describe : describe.skip;
 
-const TODAY = "2026-09-01";
+// Deliberately the real today: completeInstance checks the grace window
+// against the wall clock, so a pinned date silently ages out of it.
+const TODAY = todayInLondon();
 
 describeDb("slack actions", () => {
   let fixture: Fixture;

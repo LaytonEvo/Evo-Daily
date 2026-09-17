@@ -5,7 +5,7 @@ import { generateInstances, sweepMissed } from "@/lib/recurrence";
 import { completeInstance, isOverdue, daysLate, isWithinGraceWindow } from "@/lib/instances";
 import { ensureInstancesForToday, getMyDay } from "@/lib/my-day";
 import { assertCronSecret } from "@/lib/cron-auth";
-import { addDays, londonTimeOn } from "@/lib/time";
+import { addDays, londonTimeOn, toDbDate } from "@/lib/time";
 
 const available = await databaseAvailable();
 const describeDb = available ? describe : describe.skip;
@@ -128,7 +128,10 @@ describeDb("/my-day sections", () => {
     expect(day.doneToday).toHaveLength(0);
   });
 
-  it("splits today, this week and this month correctly", async () => {
+  it("shows today and nothing scheduled after it", async () => {
+    // The screen answers "what do I owe now". Instances exist for the rest of
+    // the month — they simply have no business on this screen, or every day
+    // opens on a backlog you are not yet behind on.
     await createTemplate(fixture, {
       title: "Every day",
       startDate: TODAY,
@@ -144,10 +147,15 @@ describeDb("/my-day sections", () => {
 
     const day = await getMyDay(prisma, { id: fixture.memberId, organisationId: fixture.orgId }, TODAY);
 
-    // Thu 27 Aug: this week runs to Sunday the 30th.
     expect(day.dueToday.map((t) => t.dueDate)).toEqual([TODAY]);
-    expect(day.thisWeek.map((t) => t.dueDate)).toEqual(["2026-08-28", "2026-08-29", "2026-08-30"]);
-    expect(day.thisMonth.map((t) => t.title).sort()).toEqual(["Every day", "Month end"]);
+    expect(day.overdue).toHaveLength(0);
+    expect(day.doneToday).toHaveLength(0);
+
+    // The future work was generated; it is just not on the screen.
+    const generated = await prisma.taskInstance.count({
+      where: { assigneeId: fixture.memberId, dueDate: { gt: toDbDate(TODAY) } },
+    });
+    expect(generated).toBeGreaterThan(0);
   });
 
   it("moves a completed task into Done today and updates the progress ring", async () => {
