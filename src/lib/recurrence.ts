@@ -334,6 +334,35 @@ export async function regenerateFutureInstances(
 }
 
 /**
+ * Bring today's still-open instance into line with who owns the task now.
+ *
+ * A pending instance due today carries no record — nobody has done it — so
+ * moving it rewrites nothing. Leaving it behind only guarantees that the task
+ * list and My Day disagree about whose job it is until tomorrow, which reads
+ * as a bug and was reported as one.
+ *
+ * Deliberately today only. An overdue day that is still open is a task
+ * somebody has been sitting on, and that miss is theirs, not the new owner's.
+ * Anything completed, missed or excused is history and never moves.
+ */
+export async function realignTodayToOwner(
+  db: DbClient,
+  templateId: string,
+  assigneeId: string,
+  today: DateOnly,
+): Promise<number> {
+  const { count } = await db.taskInstance.updateMany({
+    where: {
+      templateId,
+      status: InstanceStatus.PENDING,
+      dueDate: toDbDate(today),
+    },
+    data: { assigneeId },
+  });
+  return count;
+}
+
+/**
  * Drop future pending instances without regenerating — used when a template is
  * deactivated. All history is left intact; templates are never hard-deleted.
  */

@@ -8,10 +8,15 @@ import {
   seedFixture,
   type Fixture,
 } from "./helpers/db";
-import { deleteTemplate, setTemplateActive } from "@/lib/templates";
+import {
+  deleteTemplate,
+  reassignTemplates,
+  setTemplateActive,
+  updateTemplate,
+} from "@/lib/templates";
 import { generateInstances } from "@/lib/recurrence";
 import { createAbsence } from "@/lib/absences";
-import { addDays, todayInLondon } from "@/lib/time";
+import { addDays, toDbDate, todayInLondon } from "@/lib/time";
 
 const available = await databaseAvailable();
 const describeDb = available ? describe : describe.skip;
@@ -122,5 +127,104 @@ describeDb("deleting a task", () => {
       /not found/i,
     );
     expect(await prisma.taskTemplate.findUnique({ where: { id: template.id } })).not.toBeNull();
+  });
+});
+
+describeDb("reassigning a task", () => {
+  let fixture: Fixture;
+
+  beforeEach(async () => {
+    fixture = await seedFixture();
+  });
+
+  /** A daily task owned by the member, running from a week ago. */
+  const daily = () =>
+    createTemplate(fixture, {
+      title: "Publish today's instant deals",
+      startDate: addDays(TODAY, -7),
+      daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+      assigneeId: fixture.memberId,
+    });
+
+  it("moves today's still-open task to the new owner", async () => {
+    const template = await daily();
+    await generateInstances(prisma, addDays(TODAY, -7), addDays(TODAY, 14));
+
+    await reassignTemplates(prisma, fixture.orgId, [template.id], fixture.otherMemberId, TODAY);
+
+    const today = await prisma.taskInstance.findFirstOrThrow({
+      where: { templateId: template.id, dueDate: toDbDate(TODAY) },
+    });
+    expect(today.assigneeId).toBe(fixture.otherMemberId);
+  });
+
+  it("leaves an overdue open day with the person who sat on it", async () => {
+    const template = await daily();
+    await generateInstances(prisma, addDays(TODAY, -7), addDays(TODAY, 14));
+
+    await reassignTemplates(prisma, fixture.orgId, [template.id], fixture.otherMemberId, TODAY);
+
+    const yesterday = await prisma.taskInstance.findFirstOrThrow({
+      where: { templateId: template.id, dueDate: toDbDate(addDays(TODAY, -1)) },
+    });
+    expect(yesterday.assigneeId).toBe(fixture.memberId);
+  });
+
+  it("never moves a day that is already on the record", async () => {
+    const template = await daily();
+    await generateInstances(prisma, addDays(TODAY, -7), addDays(TODAY, 14));
+    await prisma.taskInstance.updateMany({
+      where: { templateId: template.id, dueDate: toDbDate(TODAY) },
+      data: { status: InstanceStatus.COMPLETED, completedAt: new Date() },
+    });
+
+    await reassignTemplates(prisma, fixture.orgId, [template.id], fixture.otherMemberId, TODAY);
+
+    const today = await prisma.taskInstance.findFirstOrThrow({
+      where: { templateId: template.id, dueDate: toDbDate(TODAY) },
+    });
+    // Completed by the member: moving it would hand someone else the credit.
+    expect(today.assigneeId).toBe(fixture.memberId);
+  });
+
+  it("does the same when the owner is changed from the edit drawer", async () => {
+    const template = await daily();
+    await generateInstances(prisma, addDays(TODAY, -7), addDays(TODAY, 14));
+
+    await updateTemplate(
+      prisma,
+      fixture.orgId,
+      template.id,
+      {
+        title: template.title,
+        assigneeId: fixture.otherMemberId,
+        frequency: template.frequency,
+        daysOfWeek: template.daysOfWeek,
+        startDate: TODAY,
+        isActive: true,
+      },
+      TODAY,
+    );
+
+    const today = await prisma.taskInstance.findFirstOrThrow({
+      where: { templateId: template.id, dueDate: toDbDate(TODAY) },
+    });
+    expect(today.assigneeId).toBe(fixture.otherMemberId);
+  });
+
+  it("leaves a missed day alone", async () => {
+    const template = await daily();
+    await generateInstances(prisma, addDays(TODAY, -7), addDays(TODAY, 14));
+    await prisma.taskInstance.updateMany({
+      where: { templateId: template.id, dueDate: toDbDate(addDays(TODAY, -5)) },
+      data: { status: InstanceStatus.MISSED },
+    });
+
+    await reassignTemplates(prisma, fixture.orgId, [template.id], fixture.otherMemberId, TODAY);
+
+    const missed = await prisma.taskInstance.findFirstOrThrow({
+      where: { templateId: template.id, dueDate: toDbDate(addDays(TODAY, -5)) },
+    });
+    expect(missed.assigneeId).toBe(fixture.memberId);
   });
 });

@@ -5,7 +5,10 @@
  * the drawer, a bulk reassign, a duplicate — obeys them identically:
  *
  *  - Editing changes future instances only. PENDING instances dated after
- *    today are rebuilt; anything due today or earlier is never touched.
+ *    today are rebuilt; anything due today or earlier keeps the title and
+ *    category it was generated with. The one exception is the owner: today's
+ *    instance follows a reassignment, because nobody has done it yet and
+ *    leaving it behind just makes two screens disagree.
  *  - Deactivating drops future PENDING instances and leaves history intact.
  *  - Deleting is only for a task nothing has happened to yet. Anything with a
  *    record is deactivated instead, so no report is ever rewritten.
@@ -16,6 +19,7 @@ import { z } from "zod";
 import {
   DEFAULT_DAYS_OF_WEEK,
   generateInstances,
+  realignTodayToOwner,
   regenerateFutureInstances,
   removeFutureInstances,
 } from "./recurrence";
@@ -172,13 +176,17 @@ export async function updateTemplate(
     },
   });
 
-  // Editing changes the future only. Today's instances and all history keep
-  // the title, assignee and category they were generated with.
+  // Editing changes the future only. Today's instance and all history keep the
+  // title and category they were generated with.
   if (template.isActive) {
     await regenerateFutureInstances(db, template.id, today, generationHorizonDays);
   } else {
     await removeFutureInstances(db, template.id, today);
   }
+
+  // The owner is the exception: an open task due today belongs to whoever owns
+  // it now, not whoever owned it this morning.
+  await realignTodayToOwner(db, template.id, template.assigneeId, today);
 
   return template;
 }
@@ -301,7 +309,10 @@ export async function duplicateTemplate(
   return copy;
 }
 
-/** Bulk reassign. Future instances only — the historical split stays correct. */
+/**
+ * Bulk reassign. Future instances and today's still-open one; history stays
+ * exactly where it is, so the split between people never changes retroactively.
+ */
 export async function reassignTemplates(
   db: PrismaClient,
   organisationId: string,
@@ -329,6 +340,7 @@ export async function reassignTemplates(
     if (template.isActive) {
       await regenerateFutureInstances(db, template.id, today, generationHorizonDays);
     }
+    await realignTodayToOwner(db, template.id, assigneeId, today);
   }
 
   return templates.length;
