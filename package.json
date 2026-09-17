@@ -18,6 +18,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:bootstrap": "tsx prisma/bootstrap.ts",
+    "db:import-tasks": "tsx prisma/import-tasks.ts",
     "postinstall": "prisma generate",
     "test:db": "prisma migrate deploy && vitest run"
   },
@@ -55,6 +56,7 @@
     "recharts": "^3.10.1",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^3.4.19",
+    "tsx": "^4.23.12",
     "typescript": "^5.9.3",
     "zod": "^4.4.3"
   },
@@ -62,7 +64,6 @@
     "@types/bcryptjs": "^2.4.6",
     "eslint": "^9.39.5",
     "eslint-config-next": "^15.5.24",
-    "tsx": "^4.23.12",
     "vitest": "^4.1.11"
   }
 }
