@@ -117,10 +117,13 @@ export function TaskRow({
               {done && task.wasLate ? (
                 <span className="font-medium text-warning">late</span>
               ) : null}
+              {/* On a phone "2 days late" sitting beside the title costs it half
+                  the row, so every title wraps. Down here it costs nothing. */}
+              {trailing ? <span className="sm:hidden">{trailing}</span> : null}
             </div>
           </div>
 
-          {trailing}
+          {trailing ? <span className="hidden sm:block">{trailing}</span> : null}
 
           <button
             type="button"

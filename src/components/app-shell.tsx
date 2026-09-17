@@ -92,7 +92,7 @@ export function AppShell({
       ) : null}
 
       <div className={cn(hasNav && "xl:pl-64")}>
-        <header className="sticky top-0 z-30 bg-background/85 backdrop-blur-xl">
+        <header className="sticky top-0 z-30 bg-background/95 backdrop-blur-xl">
           <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
             {hasNav ? (
               <button

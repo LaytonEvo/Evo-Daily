@@ -112,7 +112,7 @@ export function MyDayScreen({
         <p className="mb-4 rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">{notice}</p>
       ) : null}
 
-      <header className="mb-6 flex items-center gap-4">
+      <header className="mb-4 flex items-center gap-4 sm:mb-6">
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-2xl font-bold tracking-tight">
             {greeting()}, {firstName}
@@ -141,24 +141,26 @@ export function MyDayScreen({
       ) : null}
 
       {sections.overdue.length > 0 ? (
-        <div
-          role="tablist"
-          aria-label="Which tasks to show"
-          className="mb-4 flex gap-1 rounded-xl bg-muted p-1"
-        >
-          <TabButton
-            selected={tab === "today"}
-            onClick={() => setTab("today")}
-            label="Today"
-            count={sections.dueToday.length}
-          />
-          <TabButton
-            selected={tab === "overdue"}
-            onClick={() => setTab("overdue")}
-            label="Overdue"
-            count={sections.overdue.length}
-            tone="danger"
-          />
+        <div className="sticky top-16 z-20 -mx-4 mb-4 bg-background px-4 pb-2 pt-1 sm:static sm:mx-0 sm:px-0 sm:pb-0 sm:pt-0">
+          <div
+            role="tablist"
+            aria-label="Which tasks to show"
+            className="flex gap-1 rounded-xl bg-muted p-1"
+          >
+            <TabButton
+              selected={tab === "today"}
+              onClick={() => setTab("today")}
+              label="Today"
+              count={sections.dueToday.length}
+            />
+            <TabButton
+              selected={tab === "overdue"}
+              onClick={() => setTab("overdue")}
+              label="Overdue"
+              count={sections.overdue.length}
+              tone="danger"
+            />
+          </div>
         </div>
       ) : null}
 
@@ -189,6 +191,23 @@ export function MyDayScreen({
           </Section>
         ) : (
           <>
+            {sections.dueToday.length === 0 && !allClear ? (
+              <div className="rounded-lg border border-dashed bg-card/50 px-4 py-8 text-center">
+                <p className="text-sm font-medium">Nothing due today.</p>
+                {sections.overdue.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setTab("overdue")}
+                    className="mt-1 inline-flex h-10 items-center px-2 text-sm font-medium text-destructive underline underline-offset-4"
+                  >
+                    {sections.overdue.length === 1
+                      ? "1 overdue task to catch up on"
+                      : `${sections.overdue.length} overdue tasks to catch up on`}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
             <Section title="Today" count={sections.dueToday.length}>
               {sections.dueToday.map((task) => (
                 <TaskRow

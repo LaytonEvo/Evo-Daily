@@ -48,7 +48,7 @@ export function Section({
       {collapsedByDefault ? (
         <button
           type="button"
-          className="flex w-full items-center justify-between gap-2 py-1"
+          className="-my-1 flex h-10 w-full items-center justify-between gap-2"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
         >
