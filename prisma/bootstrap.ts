@@ -121,6 +121,7 @@ async function main() {
 
   // Dependency order.
   await prisma.auditLog.deleteMany();
+  await prisma.absence.deleteMany();
   await prisma.taskInstance.deleteMany();
   await prisma.taskTemplate.deleteMany();
   await prisma.category.deleteMany();

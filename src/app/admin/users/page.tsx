@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
 import { requireAdminPage } from "@/lib/guards";
 import { AppShell } from "@/components/app-shell";
+import { listAbsences } from "@/lib/absences";
+import { toDateOnly } from "@/lib/time";
 import { UsersScreen } from "./users-screen";
 
 export const metadata = { title: "People · EvoTasks" };
@@ -9,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function UsersPage() {
   const admin = await requireAdminPage();
 
-  const [users, categories] = await Promise.all([
+  const [users, categories, absences] = await Promise.all([
     prisma.user.findMany({
       where: { organisationId: admin.organisationId },
       select: {
@@ -32,6 +34,7 @@ export default async function UsersPage() {
       // retired, so the screen can say which before the admin clicks.
       include: { _count: { select: { templates: true, instances: true } } },
     }),
+    listAbsences(prisma, admin.organisationId),
   ]);
 
   return (
@@ -56,6 +59,14 @@ export default async function UsersPage() {
           isActive: c.isActive,
           templateCount: c._count.templates,
           instanceCount: c._count.instances,
+        }))}
+        absences={absences.map((a) => ({
+          id: a.id,
+          from: toDateOnly(a.from),
+          to: toDateOnly(a.to),
+          reason: a.reason,
+          user: a.user,
+          cover: a.cover,
         }))}
       />
     </AppShell>

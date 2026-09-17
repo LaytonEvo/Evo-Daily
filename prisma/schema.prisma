@@ -20,6 +20,7 @@ model Organisation {
   createdAt DateTime @default(now())
 
   users       User[]
+  absences    Absence[]
   categories  Category[]
   templates   TaskTemplate[]
   instances   TaskInstance[]
@@ -52,6 +53,9 @@ model User {
   auditLogs          AuditLog[]
   comments           Comment[]
   attachments        Attachment[]
+  absences           Absence[]      @relation("AbsenceUser")
+  covering           Absence[]      @relation("AbsenceCover")
+  bookedAbsences     Absence[]      @relation("AbsenceCreator")
 
   @@index([organisationId, isActive])
 }
@@ -153,6 +157,10 @@ enum InstanceStatus {
   PENDING
   COMPLETED
   MISSED
+  /// Nobody was expected to do this — the assignee was away and it was not
+  /// covered. Counted in neither the numerator nor the denominator of a
+  /// completion rate, so time off does not read as poor performance.
+  EXCUSED
 }
 
 // Every status change writes exactly one row here. The reporting is only
@@ -230,4 +238,37 @@ model Attachment {
   uploadedBy   User         @relation(fields: [uploadedById], references: [id])
 
   @@index([commentId])
+}
+
+/// A period when someone is not working.
+///
+/// Both dates are inclusive and stored as plain dates, like every other date
+/// in this app — a holiday is a set of days, not an instant, and the London
+/// conversion belongs in lib/time.
+///
+/// With a cover person, that period's tasks are reassigned to them and count
+/// against them as normal. Without one, the tasks become EXCUSED: still on the
+/// record, so you can see what went uncovered, but out of the completion rate.
+model Absence {
+  id             String   @id @default(cuid())
+  organisationId String
+  userId         String
+  from           DateTime @db.Date
+  to             DateTime @db.Date
+  /// Free text: "Annual leave", "Sick", "Course". Not an enum — the reasons a
+  /// person is away are not a fixed list and nothing branches on this.
+  reason         String?
+  /// Null means the work is excused rather than covered.
+  coverUserId    String?
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  user         User         @relation("AbsenceUser", fields: [userId], references: [id])
+  cover        User?        @relation("AbsenceCover", fields: [coverUserId], references: [id])
+  createdBy    User         @relation("AbsenceCreator", fields: [createdById], references: [id])
+
+  @@index([organisationId, from, to])
+  @@index([userId, from, to])
 }

@@ -43,6 +43,7 @@ async function main() {
 
   // Wipe in dependency order so the seed is re-runnable.
   await prisma.auditLog.deleteMany();
+  await prisma.absence.deleteMany();
   await prisma.taskInstance.deleteMany();
   await prisma.taskTemplate.deleteMany();
   await prisma.category.deleteMany();

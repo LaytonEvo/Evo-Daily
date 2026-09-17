@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { CategoryEditor, type Category } from "./category-editor";
+import { AbsenceEditor, type AbsenceRow } from "./absence-editor";
 import { cn } from "@/lib/utils";
 import { generatePassword } from "@/lib/generate-password";
 
@@ -29,10 +30,12 @@ export function UsersScreen({
   currentUserId,
   users,
   categories,
+  absences,
 }: {
   currentUserId: string;
   users: Person[];
   categories: Category[];
+  absences: AbsenceRow[];
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -134,6 +137,11 @@ export function UsersScreen({
       </div>
 
       <CategoryEditor categories={categories} />
+
+      <AbsenceEditor
+        absences={absences}
+        people={users.map((u) => ({ id: u.id, name: u.name, isActive: u.isActive }))}
+      />
 
       {creating || editing ? (
         <PersonDrawer

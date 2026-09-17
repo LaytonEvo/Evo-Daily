@@ -40,6 +40,7 @@ export async function databaseAvailable(): Promise<boolean> {
 
 export async function resetDatabase(): Promise<void> {
   await prisma.auditLog.deleteMany();
+  await prisma.absence.deleteMany();
   await prisma.taskInstance.deleteMany();
   await prisma.taskTemplate.deleteMany();
   await prisma.category.deleteMany();

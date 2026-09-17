@@ -209,6 +209,26 @@ export async function generateInstances(
   let created = 0;
   let skipped = 0;
 
+  // Who is away across this window, so a task generated for a holiday lands in
+  // the right state rather than being fixed up afterwards.
+  const absences = await db.absence.findMany({
+    where: {
+      ...(options.organisationId ? { organisationId: options.organisationId } : {}),
+      from: { lte: toDbDate(windowEnd) },
+      to: { gte: toDbDate(windowStart) },
+    },
+    select: { userId: true, from: true, to: true, coverUserId: true },
+  });
+
+  /** The absence covering this person on this date, if any. */
+  const absenceFor = (userId: string, date: DateOnly) =>
+    absences.find(
+      (a) =>
+        a.userId === userId &&
+        compareDateOnly(toDateOnly(a.from), date) <= 0 &&
+        compareDateOnly(toDateOnly(a.to), date) >= 0,
+    );
+
   for (const template of templates) {
     const dueDates = dueDatesFor(template, windowStart, windowEnd);
     if (dueDates.length === 0) continue;
@@ -226,6 +246,8 @@ export async function generateInstances(
         skipped += 1;
         continue;
       }
+      const away = absenceFor(template.assigneeId, dueDate);
+
       try {
         await db.taskInstance.create({
           data: {
@@ -235,8 +257,12 @@ export async function generateInstances(
             dueAt: dueAtFor(dueDate, template.dueTime),
             // Snapshot fields, frozen here and never updated afterwards.
             title: template.title,
-            assigneeId: template.assigneeId,
+            // The snapshot records who actually owes it, which on a covered
+            // holiday is the cover person, not whoever the template names.
+            assigneeId: away?.coverUserId ?? template.assigneeId,
             categoryId: template.categoryId,
+            // Away with nobody covering: owed by no one, and out of the rate.
+            ...(away && !away.coverUserId ? { status: InstanceStatus.EXCUSED } : {}),
           },
         });
         created += 1;

@@ -52,11 +52,14 @@ export type ReportWindow = {
 };
 
 export type Totals = {
+  /** Everything that was genuinely owed. Excludes excused days. */
   assigned: number;
   completed: number;
   missed: number;
   outstanding: number;
   onTime: number;
+  /** Days that fell inside someone's uncovered time off. Reported, not counted. */
+  excused: number;
   completionRate: number | null;
   onTimeRate: number | null;
 };
@@ -193,6 +196,7 @@ export function totalsOf(instances: Pick<InstanceRow, "status" | "wasLate">[]): 
   let missed = 0;
   let outstanding = 0;
   let onTime = 0;
+  let excused = 0;
 
   for (const instance of instances) {
     if (instance.status === InstanceStatus.COMPLETED) {
@@ -200,18 +204,25 @@ export function totalsOf(instances: Pick<InstanceRow, "status" | "wasLate">[]): 
       if (!instance.wasLate) onTime += 1;
     } else if (instance.status === InstanceStatus.MISSED) {
       missed += 1;
+    } else if (instance.status === InstanceStatus.EXCUSED) {
+      // Deliberately outside `assigned`: nobody was expected to do it, so it
+      // belongs in neither half of a completion rate. Counting it as assigned
+      // would make a fortnight off look like a fortnight of failure; counting
+      // it as completed would be a lie.
+      excused += 1;
     } else {
       outstanding += 1;
     }
   }
 
-  const assigned = instances.length;
+  const assigned = instances.length - excused;
   return {
     assigned,
     completed,
     missed,
     outstanding,
     onTime,
+    excused,
     completionRate: rate(completed, assigned),
     onTimeRate: rate(onTime, completed),
   };
