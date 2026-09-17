@@ -138,8 +138,12 @@ function FragmentRow({
 
 function StatusBadge({ status, wasLate }: { status: InstanceStatus; wasLate: boolean }) {
   if (status === InstanceStatus.COMPLETED) {
-    return <Badge variant={wasLate ? "warning" : "success"}>{wasLate ? "Late" : "Done"}</Badge>;
+    return wasLate ? (
+      <Badge variant="warning">Completed late</Badge>
+    ) : (
+      <Badge variant="success">Completed</Badge>
+    );
   }
   if (status === InstanceStatus.MISSED) return <Badge variant="destructive">Missed</Badge>;
-  return <Badge variant="muted">Pending</Badge>;
+  return <Badge variant="muted">Open</Badge>;
 }
