@@ -27,6 +27,8 @@ import {
   toDbDate,
   type DateOnly,
 } from "./time";
+// absences.ts imports only ./time and ./errors, so this direction is safe.
+import { coverFor } from "./absences";
 
 export const DEFAULT_DAYS_OF_WEEK = [1, 2, 3, 4, 5];
 
@@ -217,7 +219,13 @@ export async function generateInstances(
       from: { lte: toDbDate(windowEnd) },
       to: { gte: toDbDate(windowStart) },
     },
-    select: { userId: true, from: true, to: true, coverUserId: true },
+    select: {
+      userId: true,
+      from: true,
+      to: true,
+      coverUserId: true,
+      covers: { select: { templateId: true, coverUserId: true } },
+    },
   });
 
   /** The absence covering this person on this date, if any. */
@@ -247,6 +255,12 @@ export async function generateInstances(
         continue;
       }
       const away = absenceFor(template.assigneeId, dueDate);
+      // Who owes it: the per-task override if there is one, else the absence's
+      // default. Resolved by the same function the fix-up path uses, so the two
+      // cannot disagree.
+      const cover = away
+        ? coverFor(away, new Map(away.covers.map((c) => [c.templateId, c.coverUserId])), template.id)
+        : null;
 
       try {
         await db.taskInstance.create({
@@ -259,10 +273,10 @@ export async function generateInstances(
             title: template.title,
             // The snapshot records who actually owes it, which on a covered
             // holiday is the cover person, not whoever the template names.
-            assigneeId: away?.coverUserId ?? template.assigneeId,
+            assigneeId: cover ?? template.assigneeId,
             categoryId: template.categoryId,
             // Away with nobody covering: owed by no one, and out of the rate.
-            ...(away && !away.coverUserId ? { status: InstanceStatus.EXCUSED } : {}),
+            ...(away && !cover ? { status: InstanceStatus.EXCUSED } : {}),
           },
         });
         created += 1;

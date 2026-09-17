@@ -233,6 +233,120 @@ describeDb("time off", () => {
     });
   });
 
+  describe("covering some tasks but not others", () => {
+    it("moves only the chosen ones and excuses the rest", async () => {
+      const moving = await createTemplate(fixture, {
+        title: "Pick and pack web orders",
+        startDate: TODAY,
+        daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+        assigneeId: fixture.memberId,
+      });
+      const staying = await createTemplate(fixture, {
+        title: "Wipe down the fitting studio",
+        startDate: TODAY,
+        daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+        assigneeId: fixture.memberId,
+      });
+      await generateInstances(prisma, TODAY, addDays(TODAY, 1));
+
+      const { applied } = await createAbsence(prisma, admin(), {
+        userId: fixture.memberId,
+        from: TODAY,
+        to: addDays(TODAY, 1),
+        covers: [{ templateId: moving.id, coverUserId: fixture.otherMemberId }],
+      });
+
+      expect(applied).toEqual({ covered: 2, excused: 2 });
+
+      const covered = await instancesFor(moving.id);
+      expect(covered.every((r) => r.assigneeId === fixture.otherMemberId)).toBe(true);
+      expect(covered.every((r) => r.status === InstanceStatus.PENDING)).toBe(true);
+
+      const excused = await instancesFor(staying.id);
+      expect(excused.every((r) => r.assigneeId === fixture.memberId)).toBe(true);
+      expect(excused.every((r) => r.status === InstanceStatus.EXCUSED)).toBe(true);
+    });
+
+    it("lets one task be excused while the rest are covered", async () => {
+      const general = await createTemplate(fixture, {
+        title: "Clear the support inbox",
+        startDate: TODAY,
+        daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+        assigneeId: fixture.memberId,
+      });
+      const dropped = await createTemplate(fixture, {
+        title: "Post to Instagram",
+        startDate: TODAY,
+        daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+        assigneeId: fixture.memberId,
+      });
+      await generateInstances(prisma, TODAY, TODAY);
+
+      // Default covers everything; this one task opts out.
+      const { applied } = await createAbsence(prisma, admin(), {
+        userId: fixture.memberId,
+        from: TODAY,
+        to: TODAY,
+        coverUserId: fixture.otherMemberId,
+        covers: [{ templateId: dropped.id, coverUserId: null }],
+      });
+
+      expect(applied).toEqual({ covered: 1, excused: 1 });
+      expect((await instancesFor(general.id))[0].assigneeId).toBe(fixture.otherMemberId);
+      expect((await instancesFor(dropped.id))[0].status).toBe(InstanceStatus.EXCUSED);
+    });
+
+    it("applies the same split to days generated afterwards", async () => {
+      const moving = await createTemplate(fixture, {
+        title: "Goods in",
+        startDate: TODAY,
+        daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+        assigneeId: fixture.memberId,
+      });
+      const staying = await createTemplate(fixture, {
+        title: "Range balls",
+        startDate: TODAY,
+        daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+        assigneeId: fixture.memberId,
+      });
+
+      await createAbsence(prisma, admin(), {
+        userId: fixture.memberId,
+        from: addDays(TODAY, 1),
+        to: addDays(TODAY, 2),
+        covers: [{ templateId: moving.id, coverUserId: fixture.otherMemberId }],
+      });
+      // Generated after the fact, the way the nightly job does it.
+      await generateInstances(prisma, TODAY, addDays(TODAY, 2));
+
+      const covered = (await instancesFor(moving.id)).filter(
+        (r) => r.assigneeId === fixture.otherMemberId,
+      );
+      expect(covered).toHaveLength(2);
+
+      const excused = (await instancesFor(staying.id)).filter(
+        (r) => r.status === InstanceStatus.EXCUSED,
+      );
+      expect(excused).toHaveLength(2);
+    });
+
+    it("refuses a per-task cover that is the absent person", async () => {
+      const template = await createTemplate(fixture, {
+        title: "Anything",
+        startDate: TODAY,
+        assigneeId: fixture.memberId,
+      });
+      await expect(
+        createAbsence(prisma, admin(), {
+          userId: fixture.memberId,
+          from: TODAY,
+          to: TODAY,
+          covers: [{ templateId: template.id, coverUserId: fixture.memberId }],
+        }),
+      ).rejects.toThrow(/cover their own/i);
+    });
+  });
+
   it("puts outstanding work back when the time off is cancelled", async () => {
     const template = await dailyTask();
     await generateInstances(prisma, TODAY, addDays(TODAY, 2));

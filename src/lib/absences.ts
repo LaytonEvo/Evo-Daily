@@ -26,8 +26,26 @@ export type AbsenceInput = {
   from: DateOnly;
   to: DateOnly;
   reason?: string | null;
+  /** Applies to every task in the period unless a `covers` entry overrides it. */
   coverUserId?: string | null;
+  /** Per-task overrides. A null coverUserId excuses that one task. */
+  covers?: { templateId: string; coverUserId: string | null }[];
 };
+
+/**
+ * Who owes one task during an absence, or null when nobody does.
+ *
+ * The single place this is decided. Both the fix-up of existing instances and
+ * the generator ask this, so a task cannot be covered by one path and excused
+ * by the other.
+ */
+export function coverFor(
+  absence: { coverUserId: string | null },
+  overrides: Map<string, string | null>,
+  templateId: string,
+): string | null {
+  return overrides.has(templateId) ? overrides.get(templateId)! : absence.coverUserId;
+}
 
 function assertAdmin(actor: { role: Role }) {
   if (actor.role !== Role.ADMIN) {
@@ -62,6 +80,19 @@ async function validate(
     if (!cover) throw new ApiError("That cover person is not available", 404);
   }
 
+  for (const entry of input.covers ?? []) {
+    if (entry.coverUserId === input.userId) {
+      throw new ApiError("Someone cannot cover their own time off", 422);
+    }
+    if (entry.coverUserId) {
+      const cover = await db.user.findFirst({
+        where: { id: entry.coverUserId, organisationId, isActive: true },
+        select: { id: true },
+      });
+      if (!cover) throw new ApiError("That cover person is not available", 404);
+    }
+  }
+
   // Overlapping absences for one person would fight over the same instances,
   // and the winner would depend on which was applied last.
   const clash = await db.absence.findFirst({
@@ -83,6 +114,13 @@ export async function listAbsences(db: DbClient, organisationId: string) {
     include: {
       user: { select: { id: true, name: true } },
       cover: { select: { id: true, name: true } },
+      covers: {
+        select: {
+          templateId: true,
+          coverUserId: true,
+          cover: { select: { name: true } },
+        },
+      },
     },
   });
 }
@@ -104,6 +142,12 @@ export async function createAbsence(
       reason: input.reason?.trim() || null,
       coverUserId: input.coverUserId ?? null,
       createdById: actor.id,
+      covers: {
+        create: (input.covers ?? []).map((c) => ({
+          templateId: c.templateId,
+          coverUserId: c.coverUserId,
+        })),
+      },
     },
   });
 
@@ -150,32 +194,57 @@ export async function applyAbsence(
   db: DbClient,
   absenceId: string,
 ): Promise<{ covered: number; excused: number }> {
-  const absence = await db.absence.findUnique({ where: { id: absenceId } });
+  const absence = await db.absence.findUnique({
+    where: { id: absenceId },
+    include: { covers: { select: { templateId: true, coverUserId: true } } },
+  });
   if (!absence) return { covered: 0, excused: 0 };
 
-  const window = {
-    organisationId: absence.organisationId,
-    assigneeId: absence.userId,
-    status: InstanceStatus.PENDING,
-    dueDate: { gte: absence.from, lte: absence.to },
-  };
+  const overrides = new Map(absence.covers.map((c) => [c.templateId, c.coverUserId]));
 
-  if (absence.coverUserId) {
-    const moved = await db.taskInstance.updateMany({
-      where: window,
+  const outstanding = await db.taskInstance.findMany({
+    where: {
+      organisationId: absence.organisationId,
+      assigneeId: absence.userId,
+      status: InstanceStatus.PENDING,
+      dueDate: { gte: absence.from, lte: absence.to },
+    },
+    select: { id: true, templateId: true },
+  });
+
+  // Group by destination so this is a handful of updateMany calls rather than
+  // one per instance.
+  const byCover = new Map<string | null, string[]>();
+  for (const instance of outstanding) {
+    const to = coverFor(absence, overrides, instance.templateId);
+    const bucket = byCover.get(to);
+    if (bucket) bucket.push(instance.id);
+    else byCover.set(to, [instance.id]);
+  }
+
+  let covered = 0;
+  let excused = 0;
+
+  for (const [coverUserId, ids] of byCover) {
+    if (coverUserId) {
       // assigneeId is a snapshot field, deliberately frozen at generation.
       // This is the one sanctioned exception: the work genuinely changes hands,
       // and the alternative is holding someone to a task they cannot do.
-      data: { assigneeId: absence.coverUserId },
-    });
-    return { covered: moved.count, excused: 0 };
+      await db.taskInstance.updateMany({
+        where: { id: { in: ids } },
+        data: { assigneeId: coverUserId },
+      });
+      covered += ids.length;
+    } else {
+      await db.taskInstance.updateMany({
+        where: { id: { in: ids } },
+        data: { status: InstanceStatus.EXCUSED },
+      });
+      excused += ids.length;
+    }
   }
 
-  const excused = await db.taskInstance.updateMany({
-    where: window,
-    data: { status: InstanceStatus.EXCUSED },
-  });
-  return { covered: 0, excused: excused.count };
+  return { covered, excused };
 }
 
 /** Absences covering a date, for the generator. */

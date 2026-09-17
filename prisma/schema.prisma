@@ -55,6 +55,7 @@ model User {
   attachments        Attachment[]
   absences           Absence[]      @relation("AbsenceUser")
   covering           Absence[]      @relation("AbsenceCover")
+  coveringTasks      AbsenceCover[] @relation("AbsenceCoverPerTask")
   bookedAbsences     Absence[]      @relation("AbsenceCreator")
 
   @@index([organisationId, isActive])
@@ -75,9 +76,10 @@ model Category {
   // reports still resolve the name they were recorded under.
   isActive       Boolean @default(true)
 
-  organisation Organisation   @relation(fields: [organisationId], references: [id])
-  templates    TaskTemplate[]
-  instances    TaskInstance[]
+  organisation  Organisation   @relation(fields: [organisationId], references: [id])
+  templates     TaskTemplate[]
+  instances     TaskInstance[]
+  absenceCovers AbsenceCover[]
 
   @@unique([organisationId, name])
   @@index([organisationId, sortOrder])
@@ -102,11 +104,12 @@ model TaskTemplate {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  organisation Organisation   @relation(fields: [organisationId], references: [id])
-  category     Category?      @relation(fields: [categoryId], references: [id])
-  assignee     User           @relation("TemplateAssignee", fields: [assigneeId], references: [id])
-  createdBy    User           @relation("TemplateCreator", fields: [createdById], references: [id])
-  instances    TaskInstance[]
+  organisation  Organisation   @relation(fields: [organisationId], references: [id])
+  category      Category?      @relation(fields: [categoryId], references: [id])
+  assignee      User           @relation("TemplateAssignee", fields: [assigneeId], references: [id])
+  createdBy     User           @relation("TemplateCreator", fields: [createdById], references: [id])
+  instances     TaskInstance[]
+  absenceCovers AbsenceCover[]
 
   @@index([organisationId, isActive])
   @@index([assigneeId])
@@ -258,17 +261,40 @@ model Absence {
   /// Free text: "Annual leave", "Sick", "Course". Not an enum — the reasons a
   /// person is away are not a fixed list and nothing branches on this.
   reason         String?
-  /// Null means the work is excused rather than covered.
+  /// The default for every task in the period. Null excuses them. Individual
+  /// tasks can override this with an AbsenceCover row.
   coverUserId    String?
   createdById    String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organisation Organisation @relation(fields: [organisationId], references: [id])
-  user         User         @relation("AbsenceUser", fields: [userId], references: [id])
-  cover        User?        @relation("AbsenceCover", fields: [coverUserId], references: [id])
-  createdBy    User         @relation("AbsenceCreator", fields: [createdById], references: [id])
+  organisation Organisation   @relation(fields: [organisationId], references: [id])
+  user         User           @relation("AbsenceUser", fields: [userId], references: [id])
+  cover        User?          @relation("AbsenceCover", fields: [coverUserId], references: [id])
+  createdBy    User           @relation("AbsenceCreator", fields: [createdById], references: [id])
+  covers       AbsenceCover[]
 
   @@index([organisationId, from, to])
   @@index([userId, from, to])
+}
+
+/// Per-task cover for one absence, overriding the absence's default.
+///
+/// A row with no coverUserId is not redundant: it is how one task gets excused
+/// while the rest of the period is covered by someone.
+model AbsenceCover {
+  id          String  @id @default(cuid())
+  absenceId   String
+  templateId  String
+  /// Null means this particular task is excused rather than covered.
+  coverUserId String?
+
+  absence    Absence      @relation(fields: [absenceId], references: [id], onDelete: Cascade)
+  template   TaskTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  cover      User?        @relation("AbsenceCoverPerTask", fields: [coverUserId], references: [id])
+  category   Category?    @relation(fields: [categoryId], references: [id])
+  categoryId String?
+
+  @@unique([absenceId, templateId])
+  @@index([templateId])
 }

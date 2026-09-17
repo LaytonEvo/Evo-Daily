@@ -67,6 +67,11 @@ export default async function UsersPage() {
           reason: a.reason,
           user: a.user,
           cover: a.cover,
+          covers: a.covers.map((c) => ({
+            templateId: c.templateId,
+            coverUserId: c.coverUserId,
+            coverName: c.cover?.name ?? null,
+          })),
         }))}
       />
     </AppShell>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarOff, Plus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input, Select } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 
+type TaskRow = {
+  id: string;
+  title: string;
+  schedule: string;
+  categoryName: string | null;
+  categoryColour: string | null;
+};
+
 export type AbsenceRow = {
   id: string;
   from: string;
@@ -16,6 +24,8 @@ export type AbsenceRow = {
   reason: string | null;
   user: { id: string; name: string };
   cover: { id: string; name: string } | null;
+  /** Per-task overrides, so the row can say when it is not all-or-nothing. */
+  covers: { templateId: string; coverUserId: string | null; coverName: string | null }[];
 };
 
 /**
@@ -86,11 +96,11 @@ export function AbsenceEditor({
                 {row.reason ? (
                   <span className="text-muted-foreground">· {row.reason}</span>
                 ) : null}
-                {row.cover ? (
-                  <Badge variant="default">covered by {row.cover.name.split(" ")[0]}</Badge>
-                ) : (
-                  <Badge variant="muted">excused</Badge>
-                )}
+                {describeCover(row).map((label, i) => (
+                  <Badge key={i} variant={label.startsWith("excused") ? "muted" : "default"}>
+                    {label}
+                  </Badge>
+                ))}
                 <button
                   type="button"
                   aria-label={`Remove time off for ${row.user.name}`}
@@ -137,6 +147,35 @@ function AbsenceDialog({
   const [coverUserId, setCoverUserId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [tasks, setTasks] = useState<TaskRow[] | null>(null);
+  // templateId -> cover user id, or "" for excused. Only holds overrides.
+  const [perTask, setPerTask] = useState<Record<string, string>>({});
+
+  // Their tasks, reloaded when the person changes — the list is what you are
+  // choosing between, so it has to follow the selection.
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    setTasks(null);
+    setPerTask({});
+    fetch(`/api/admin/users/${userId}/templates`)
+      .then((r) => (r.ok ? r.json() : { templates: [] }))
+      .then((d) => {
+        if (!cancelled) setTasks(d.templates ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setTasks([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  /** What this task resolves to right now: an override, else the default. */
+  const resolved = (templateId: string) =>
+    templateId in perTask ? perTask[templateId] : coverUserId;
+
+  const others = active.filter((p) => p.id !== userId);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -152,6 +191,10 @@ function AbsenceDialog({
         to,
         reason: reason.trim() || null,
         coverUserId: coverUserId || null,
+        // Only send genuine overrides; the rest follow the default.
+        covers: Object.entries(perTask)
+          .filter(([templateId]) => resolved(templateId) !== coverUserId)
+          .map(([templateId, cover]) => ({ templateId, coverUserId: cover || null })),
       }),
     });
     setPending(false);
@@ -203,27 +246,70 @@ function AbsenceDialog({
 
           <div className="flex flex-col gap-1.5">
             <label htmlFor="absent-cover" className="text-sm font-medium">
-              Cover
-              <span className="ml-1 font-normal text-muted-foreground">optional</span>
+              Cover everything with
             </label>
             <Select
               id="absent-cover"
               value={coverUserId}
-              onChange={(e) => setCoverUserId(e.target.value)}
+              onChange={(e) => {
+                setCoverUserId(e.target.value);
+                // The default is what you set here; per-task choices start again
+                // from it rather than silently outranking it.
+                setPerTask({});
+              }}
             >
-              <option value="">Nobody — excuse these days</option>
-              {active
-                .filter((p) => p.id !== userId)
-                .map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
+              <option value="">Nobody — excuse them</option>
+              {others.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
             </Select>
             <p className="text-xs text-muted-foreground">
-              {coverUserId
-                ? "Their tasks move across and count as normal."
-                : "Their tasks stay visible but count neither way."}
+              Change any single task below.
             </p>
           </div>
+
+          {tasks === null ? (
+            <p className="text-sm text-muted-foreground">Loading their tasks…</p>
+          ) : tasks.length === 0 ? (
+            <p className="text-sm italic text-muted-foreground">
+              They have no active recurring tasks.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <p className="text-sm font-medium">
+                Tasks
+                <span className="ml-1 font-normal text-muted-foreground">
+                  {summarise(tasks, resolved)}
+                </span>
+              </p>
+              <ul className="max-h-56 overflow-y-auto rounded-xl border border-input">
+                {tasks.map((task) => (
+                  <li
+                    key={task.id}
+                    className="flex items-center gap-2 border-b px-3 py-2 last:border-0"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{task.title}</p>
+                      <p className="truncate text-xs text-muted-foreground">{task.schedule}</p>
+                    </div>
+                    <Select
+                      aria-label={`Cover for ${task.title}`}
+                      value={resolved(task.id)}
+                      onChange={(e) =>
+                        setPerTask((current) => ({ ...current, [task.id]: e.target.value }))
+                      }
+                      className="h-9 w-36 shrink-0 text-xs"
+                    >
+                      <option value="">Excuse</option>
+                      {others.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </Select>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <label htmlFor="absent-reason" className="text-sm font-medium">
@@ -257,4 +343,35 @@ function formatRange(from: string, to: string): string {
   const fmt = (d: string) =>
     new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
   return from === to ? fmt(from) : `${fmt(from)} – ${fmt(to)}`;
+}
+
+/** "4 covered, 2 excused" — so the consequence is visible before saving. */
+function summarise(tasks: TaskRow[], resolved: (id: string) => string): string {
+  const covered = tasks.filter((t) => resolved(t.id)).length;
+  const excused = tasks.length - covered;
+  if (covered === 0) return `— all ${excused} excused`;
+  if (excused === 0) return `— all ${covered} covered`;
+  return `— ${covered} covered, ${excused} excused`;
+}
+
+/**
+ * Badges for one row. All-or-nothing reads as one badge; a mixed absence names
+ * each cover person and how many tasks they took, because "covered" alone
+ * would hide that half of it was not.
+ */
+function describeCover(row: AbsenceRow): string[] {
+  if (row.covers.length === 0) {
+    return [row.cover ? `covered by ${row.cover.name.split(" ")[0]}` : "excused"];
+  }
+
+  const counts = new Map<string, number>();
+  for (const c of row.covers) {
+    const key = c.coverName ? c.coverName.split(" ")[0] : "excused";
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const base = row.cover ? `rest to ${row.cover.name.split(" ")[0]}` : "rest excused";
+  return [
+    ...[...counts].map(([who, n]) => (who === "excused" ? `excused ${n}` : `${who} ${n}`)),
+    base,
+  ];
 }

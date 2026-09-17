@@ -13,6 +13,9 @@ const schema = z.object({
   to: dateOnly,
   reason: z.string().trim().max(200).nullish(),
   coverUserId: z.string().min(1).nullish(),
+  covers: z
+    .array(z.object({ templateId: z.string().min(1), coverUserId: z.string().min(1).nullable() }))
+    .optional(),
 });
 
 export async function GET() {
@@ -34,6 +37,7 @@ export async function POST(request: Request) {
       to: input.to,
       reason: input.reason ?? null,
       coverUserId: input.coverUserId ?? null,
+      covers: input.covers ?? [],
     });
     return NextResponse.json(
       { id: result.absence.id, ...result.applied },
