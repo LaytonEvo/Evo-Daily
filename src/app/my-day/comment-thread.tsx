@@ -232,8 +232,14 @@ export function CommentThread({
               hidden
               accept="image/*,application/pdf,text/plain,text/csv"
               onChange={(e) => {
-                setFiles((current) => [...current, ...Array.from(e.target.files ?? [])]);
+                // Read the FileList before clearing the input. A setState
+                // updater runs during the next render, by which point
+                // `value = ""` has already emptied e.target.files and the
+                // updater would append nothing.
+                const picked = Array.from(e.target.files ?? []);
+                // Cleared so picking the same file twice still fires onChange.
                 e.target.value = "";
+                setFiles((current) => [...current, ...picked]);
               }}
             />
           </>
