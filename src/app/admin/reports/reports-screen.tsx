@@ -16,9 +16,14 @@ type SortKey = keyof Pick<
   "name" | "assigned" | "completed" | "missed" | "completionRate" | "onTimeRate"
 >;
 
+type PeopleFilter = "all" | "completed" | "missed";
+
 export function ReportsScreen({ report }: { report: OrgReport }) {
   const { window, totals, deltas } = report;
   const query = `from=${window.from}&to=${window.to}`;
+  // Narrows the leaderboard to the people who actually make up the number on
+  // the tile you tapped.
+  const [people, setPeople] = useState<PeopleFilter>("all");
 
   return (
     <main className="mx-auto w-full max-w-5xl pb-16 pt-2">
@@ -55,6 +60,8 @@ export function ReportsScreen({ report }: { report: OrgReport }) {
           value={String(totals.completed)}
           count={deltas.completed}
           sub="tasks ticked off"
+          onClick={() => setPeople(people === "completed" ? "all" : "completed")}
+          active={people === "completed"}
         />
         <Stat
           label="Missed"
@@ -62,11 +69,13 @@ export function ReportsScreen({ report }: { report: OrgReport }) {
           count={deltas.missed}
           invert
           sub={`${totals.outstanding} still open`}
+          onClick={() => setPeople(people === "missed" ? "all" : "missed")}
+          active={people === "missed"}
         />
       </section>
 
       <div className="flex flex-col gap-6">
-        <Leaderboard rows={report.leaderboard} query={query} />
+        <Leaderboard rows={report.leaderboard} query={query} people={people} />
 
         <Card>
           <CardHeader className="flex-row items-start justify-between gap-3">
@@ -112,6 +121,8 @@ function Stat({
   delta,
   count,
   invert = false,
+  onClick,
+  active = false,
 }: {
   label: string;
   value: string;
@@ -119,14 +130,23 @@ function Stat({
   delta?: number | null;
   count?: number;
   invert?: boolean;
+  /** Present when the tile narrows the leaderboard below. */
+  onClick?: () => void;
+  active?: boolean;
 }) {
   const change = delta ?? (count === undefined ? null : count / 100);
   const isUp = change !== null && change > 0;
   const good = invert ? !isUp : isUp;
 
-  return (
-    <Card>
-      <CardContent className="p-4">
+  const card = (
+    <Card
+      className={cn(
+        "h-full transition-colors",
+        onClick && "cursor-pointer hover:border-primary/40",
+        active && "ring-2 ring-primary",
+      )}
+    >
+      <CardContent className="p-4 sm:p-5">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {label}
         </p>
@@ -150,14 +170,32 @@ function Stat({
       </CardContent>
     </Card>
   );
+
+  if (!onClick) return card;
+
+  return (
+    <button type="button" onClick={onClick} aria-pressed={active} className="block text-left">
+      {card}
+    </button>
+  );
 }
 
-function Leaderboard({ rows, query }: { rows: LeaderboardRow[]; query: string }) {
+function Leaderboard({
+  rows,
+  query,
+  people,
+}: {
+  rows: LeaderboardRow[];
+  query: string;
+  people: PeopleFilter;
+}) {
   const [sort, setSort] = useState<SortKey>("completionRate");
   const [ascending, setAscending] = useState(false);
 
   const sorted = useMemo(() => {
-    const copy = [...rows];
+    const copy = rows.filter((r) =>
+      people === "completed" ? r.completed > 0 : people === "missed" ? r.missed > 0 : true,
+    );
     copy.sort((a, b) => {
       // Low-volume people stay pinned below the rest whatever the sort, so a
       // 3-for-3 never appears to be outperforming someone carrying 80 tasks.
@@ -172,7 +210,7 @@ function Leaderboard({ rows, query }: { rows: LeaderboardRow[]; query: string })
       return ascending ? l - r : r - l;
     });
     return copy;
-  }, [rows, sort, ascending]);
+  }, [rows, sort, ascending, people]);
 
   function header(key: SortKey, label: string, className?: string) {
     return (

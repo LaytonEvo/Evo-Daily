@@ -29,7 +29,16 @@ export function CardDescription({ className, ...props }: React.HTMLAttributes<HT
 }
 
 export function CardContent({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("p-5 pt-0 sm:p-6 sm:pt-0", className)} {...props} />;
+  // The top padding is dropped only when a CardHeader sits above; a card whose
+  // content is its only child still needs it. Baked in as a selector rather
+  // than a prop so a bare CardContent cannot silently lose its top gap — which
+  // is exactly what happened to the report stat tiles.
+  return (
+    <div
+      className={cn("p-5 sm:p-6 [&:not(:first-child)]:pt-0", className)}
+      {...props}
+    />
+  );
 }
 
 export function CardFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {

@@ -19,11 +19,14 @@ export default async function PersonReportPage({
   searchParams,
 }: {
   params: Promise<{ userId: string }>;
-  searchParams: Promise<{ days?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ days?: string; from?: string; to?: string; filter?: string }>;
 }) {
   const admin = await requireAdminPage();
   const { userId } = await params;
   const query = await searchParams;
+  // Tiles filter the history below. Held in the URL rather than client state so
+  // it survives a refresh and can be sent to someone.
+  const filter = (["completed", "late", "missed"] as const).find((f) => f === query.filter);
 
   const window = buildWindow({
     days: query.days ? Number(query.days) : undefined,
@@ -73,13 +76,30 @@ export default async function PersonReportPage({
         </div>
 
         <section className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Stat label="Completion rate" value={formatRate(report.totals.completionRate)} />
-          <Stat label="On-time rate" value={formatRate(report.totals.onTimeRate)} />
-          <Stat label="Assigned" value={String(report.totals.assigned)} />
+          <Stat
+            label="Completion rate"
+            value={formatRate(report.totals.completionRate)}
+            href={filterHref(queryString, filter === "completed" ? undefined : "completed")}
+            active={filter === "completed"}
+          />
+          <Stat
+            label="On-time rate"
+            value={formatRate(report.totals.onTimeRate)}
+            href={filterHref(queryString, filter === "late" ? undefined : "late")}
+            active={filter === "late"}
+          />
+          <Stat
+            label="Assigned"
+            value={String(report.totals.assigned)}
+            href={filterHref(queryString, undefined)}
+            active={!filter}
+          />
           <Stat
             label="Missed"
             value={String(report.totals.missed)}
             tone={report.totals.missed > 0 ? "danger" : undefined}
+            href={filterHref(queryString, filter === "missed" ? undefined : "missed")}
+            active={filter === "missed"}
           />
         </section>
 
@@ -162,7 +182,11 @@ export default async function PersonReportPage({
               <CardDescription>{report.history.length} instances in this window.</CardDescription>
             </CardHeader>
             <CardContent className="px-0 sm:px-0">
-              <HistoryTable rows={report.history} attachmentsEnabled={storageEnabled()} />
+              <HistoryTable
+                rows={report.history}
+                attachmentsEnabled={storageEnabled()}
+                filter={filter ?? "all"}
+              />
             </CardContent>
           </Card>
         </div>
@@ -175,14 +199,25 @@ function Stat({
   label,
   value,
   tone,
+  href,
+  active = false,
 }: {
   label: string;
   value: string;
   tone?: "danger";
+  /** Present when the tile filters the history below. */
+  href?: string;
+  active?: boolean;
 }) {
-  return (
-    <Card>
-      <CardContent className="p-4">
+  const card = (
+    <Card
+      className={cn(
+        "h-full transition-colors",
+        href && "hover:border-primary/40",
+        active && "ring-2 ring-primary",
+      )}
+    >
+      <CardContent className="p-4 sm:p-5">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {label}
         </p>
@@ -197,5 +232,20 @@ function Stat({
       </CardContent>
     </Card>
   );
+
+  if (!href) return card;
+
+  return (
+    <Link href={href} aria-pressed={active} className="block rounded-lg">
+      {card}
+    </Link>
+  );
 }
 
+/** The current window, with the status filter swapped in or dropped. */
+function filterHref(queryString: string, filter: string | undefined): string {
+  const params = new URLSearchParams(queryString);
+  if (filter) params.set("filter", filter);
+  else params.delete("filter");
+  return `?${params.toString()}`;
+}

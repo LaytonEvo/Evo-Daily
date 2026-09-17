@@ -28,14 +28,42 @@ export type HistoryRow = {
  * row is opened — a window can be hundreds of rows and a request each would be
  * absurd.
  */
+export type HistoryFilter = "all" | "completed" | "late" | "missed";
+
+export function matchesFilter(row: HistoryRow, filter: HistoryFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "missed") return row.status === InstanceStatus.MISSED;
+  if (filter === "completed") return row.status === InstanceStatus.COMPLETED;
+  // "late" is a completed task that missed its cut-off, not a separate status.
+  return row.status === InstanceStatus.COMPLETED && row.wasLate;
+}
+
 export function HistoryTable({
   rows,
   attachmentsEnabled,
+  filter = "all",
+  onClearFilter,
 }: {
   rows: HistoryRow[];
   attachmentsEnabled: boolean;
+  filter?: HistoryFilter;
+  onClearFilter?: () => void;
 }) {
   const [open, setOpen] = useState<string | null>(null);
+  const shown = rows.filter((r) => matchesFilter(r, filter));
+
+  if (shown.length === 0) {
+    return (
+      <p className="px-4 py-6 text-sm text-muted-foreground">
+        Nothing matches that.{" "}
+        {onClearFilter ? (
+          <button type="button" onClick={onClearFilter} className="underline">
+            Show everything
+          </button>
+        ) : null}
+      </p>
+    );
+  }
 
   return (
     <div className="overflow-x-auto">
@@ -51,7 +79,7 @@ export function HistoryTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
+          {shown.map((row) => {
             const expanded = open === row.id;
             return (
               <FragmentRow
