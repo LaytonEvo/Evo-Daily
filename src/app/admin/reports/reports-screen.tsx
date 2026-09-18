@@ -246,7 +246,7 @@ function Leaderboard({
       </CardHeader>
       <CardContent className="px-0 sm:px-0">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm sm:min-w-[640px]">
+          <table className="w-full text-sm">
             <thead className="border-y bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 {header("name", "Person")}
@@ -340,7 +340,7 @@ function ProblemTasks({ report, query }: { report: OrgReport; query: string }) {
       </CardHeader>
       <CardContent className="px-0 sm:px-0">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm sm:min-w-[640px]">
+          <table className="w-full text-sm">
             <thead className="border-y bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-2 py-2.5 sm:px-3 font-medium">Task</th>
@@ -427,7 +427,7 @@ function Categories({ report, query }: { report: OrgReport; query: string }) {
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
                 style={{ backgroundColor: category.colour ?? "hsl(var(--muted-foreground))" }}
               />
-              <span className="w-40 shrink-0 truncate text-sm font-medium">{category.name}</span>
+              <span className="w-24 shrink-0 truncate text-sm font-medium sm:w-40">{category.name}</span>
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
                 <div
                   className={cn(
@@ -441,7 +441,7 @@ function Categories({ report, query }: { report: OrgReport; query: string }) {
                   style={{ width: `${(category.completionRate ?? 0) * 100}%` }}
                 />
               </div>
-              <span className="w-24 shrink-0 text-right text-sm tabular-nums">
+              <span className="w-16 shrink-0 text-right text-sm tabular-nums sm:w-24">
                 {formatRate(category.completionRate)}
                 <span className="ml-1 text-xs text-muted-foreground">({category.assigned})</span>
               </span>

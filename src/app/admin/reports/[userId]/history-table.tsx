@@ -82,7 +82,7 @@ export function HistoryTable({
       </ul>
 
       <div className="hidden overflow-x-auto sm:block">
-      <table className="w-full text-sm sm:min-w-[600px]">
+      <table className="w-full text-sm">
         <thead className="border-y bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
           <tr>
             <th className="px-2 py-2.5 font-medium sm:px-3">Due</th>

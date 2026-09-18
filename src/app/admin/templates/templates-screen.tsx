@@ -201,7 +201,7 @@ export function TemplatesScreen({
 
       <div className="overflow-hidden rounded-lg border bg-card">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm md:min-w-[720px]">
+          <table className="w-full text-sm">
             <thead className="border-b bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="w-8 px-1 py-2.5 sm:w-10 sm:px-3" />
@@ -254,7 +254,7 @@ export function TemplatesScreen({
                       ) : null}
                       {/* On a phone the deadline belongs on the detail line, not
                           trailing the title where it breaks the wrap. */}
-                      <span className="block max-w-[52vw] truncate text-xs text-muted-foreground md:hidden">
+                      <span className="block max-w-[42vw] truncate text-xs text-muted-foreground min-[380px]:max-w-[52vw] md:hidden">
                         {template.assigneeName} · {template.scheduleLabel}
                         {template.dueTime ? ` · by ${template.dueTime}` : ""}
                       </span>
@@ -285,7 +285,7 @@ export function TemplatesScreen({
                         assigned={template.assignedLast30}
                       />
                     </td>
-                    <td className="px-2 py-2.5 sm:px-3">
+                    <td className="px-1 py-2.5 sm:px-3">
                       <button
                         type="button"
                         role="switch"
@@ -316,7 +316,7 @@ export function TemplatesScreen({
                         />
                       </button>
                     </td>
-                    <td className="px-2 py-2.5 sm:px-3">
+                    <td className="px-1 py-2.5 sm:px-3">
                       <Button
                         variant="ghost"
                         size="icon"

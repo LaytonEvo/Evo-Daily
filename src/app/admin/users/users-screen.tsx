@@ -87,11 +87,11 @@ export function UsersScreen({
 
       <div className="overflow-hidden rounded-lg border bg-card">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm sm:min-w-[640px]">
+          <table className="w-full text-sm">
             <thead className="border-b bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-2 py-2.5 sm:px-3 font-medium">Name</th>
-                <th className="hidden px-2 py-2.5 sm:px-3 font-medium sm:table-cell">Email</th>
+                <th className="hidden px-2 py-2.5 sm:px-3 font-medium md:table-cell">Email</th>
                 <th className="px-2 py-2.5 sm:px-3 font-medium">Role</th>
                 <th className="hidden px-2 py-2.5 sm:px-3 text-right font-medium sm:table-cell">Active tasks</th>
                 <th className="hidden px-2 py-2.5 font-medium lg:table-cell sm:px-3">Last seen</th>
@@ -112,7 +112,7 @@ export function UsersScreen({
                     >
                       {person.name}
                     </Link>
-                    <span className="block max-w-[46vw] truncate text-xs font-normal text-muted-foreground sm:hidden">
+                    <span className="block max-w-[46vw] truncate text-xs font-normal text-muted-foreground md:hidden">
                       {person.email}
                     </span>
                     {!person.isActive ? (
@@ -134,7 +134,7 @@ export function UsersScreen({
                       </Badge>
                     ) : null}
                   </td>
-                  <td className="hidden px-2 py-2.5 sm:px-3 text-muted-foreground sm:table-cell">{person.email}</td>
+                  <td className="hidden px-2 py-2.5 sm:px-3 text-muted-foreground md:table-cell">{person.email}</td>
                   <td className="px-2 py-2.5 sm:px-3">
                     <Badge variant={person.role === Role.ADMIN ? "default" : "muted"}>
                       {person.role === Role.ADMIN ? "Admin" : "Member"}
