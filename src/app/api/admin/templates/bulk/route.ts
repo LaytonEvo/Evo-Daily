@@ -2,26 +2,52 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { errorResponse, requireApiAdmin } from "@/lib/guards";
-import { reassignTemplates } from "@/lib/templates";
+import { bulkChangesSchema, reassignTemplates, updateTemplates } from "@/lib/templates";
 
-const schema = z.object({
+const reassignSchema = z.object({
   action: z.literal("reassign"),
   templateIds: z.array(z.string()).min(1),
   assigneeId: z.string().min(1),
 });
 
-/** Bulk reassignment. Affects future instances only. */
+const updateSchema = z.object({
+  action: z.literal("update"),
+  templateIds: z.array(z.string()).min(1),
+  changes: bulkChangesSchema,
+});
+
+const schema = z.discriminatedUnion("action", [reassignSchema, updateSchema]);
+
+/**
+ * Bulk edits. Future instances only, exactly as a single edit is.
+ *
+ * "reassign" predates this and is kept as its own action rather than folded
+ * into "update": it is one request from a dropdown, it needs no confirmation,
+ * and routing it through the general path would make the common case carry the
+ * general case's ceremony.
+ */
 export async function POST(request: Request) {
   try {
     const admin = await requireApiAdmin();
     const body = schema.parse(await request.json());
-    const count = await reassignTemplates(
+
+    if (body.action === "reassign") {
+      const count = await reassignTemplates(
+        prisma,
+        admin.organisationId,
+        body.templateIds,
+        body.assigneeId,
+      );
+      return NextResponse.json({ reassigned: count });
+    }
+
+    const result = await updateTemplates(
       prisma,
       admin.organisationId,
       body.templateIds,
-      body.assigneeId,
+      body.changes,
     );
-    return NextResponse.json({ reassigned: count });
+    return NextResponse.json(result);
   } catch (error) {
     return errorResponse(error);
   }

@@ -3,13 +3,14 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Frequency } from "@prisma/client";
-import { Copy, Plus, Search, Users } from "lucide-react";
+import { Copy, Pencil, Plus, Search, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { cn, formatRate } from "@/lib/utils";
 import { TemplateDrawer } from "./template-drawer";
+import { BulkDrawer } from "./bulk-drawer";
 
 export type TemplateRow = {
   id: string;
@@ -56,6 +57,7 @@ export function TemplatesScreen({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<TemplateRow | null>(null);
   const [creating, setCreating] = useState(false);
+  const [bulkEditing, setBulkEditing] = useState(false);
 
   const filtered = useMemo(
     () =>
@@ -112,6 +114,24 @@ export function TemplatesScreen({
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  }
+
+  // Select-all means the rows on screen, never the ones a filter is hiding.
+  // Editing tasks you cannot see is the one way a bulk change surprises
+  // somebody, and it would be silent.
+  const visibleIds = useMemo(() => filtered.map((t) => t.id), [filtered]);
+  const selectedVisible = visibleIds.filter((id) => selected.has(id));
+  const allVisibleSelected = visibleIds.length > 0 && selectedVisible.length === visibleIds.length;
+  const someVisibleSelected =
+    selectedVisible.length > 0 && selectedVisible.length < visibleIds.length;
+
+  function toggleAllVisible() {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (allVisibleSelected) for (const id of visibleIds) next.delete(id);
+      else for (const id of visibleIds) next.add(id);
       return next;
     });
   }
@@ -192,6 +212,10 @@ export function TemplatesScreen({
                 </option>
               ))}
           </Select>
+          <Button variant="outline" size="sm" onClick={() => setBulkEditing(true)}>
+            <Pencil className="h-4 w-4" />
+            Edit selected
+          </Button>
           <span className="text-xs text-muted-foreground">Future instances only.</span>
           <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
             Clear
@@ -204,7 +228,25 @@ export function TemplatesScreen({
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="w-8 px-1 py-2.5 sm:w-10 sm:px-3" />
+                <th className="w-8 px-1 py-2.5 sm:w-10 sm:px-3">
+                  <label className="-mx-1 -my-2 flex h-10 w-[calc(100%+0.5rem)] cursor-pointer items-center justify-center">
+                    <input
+                      type="checkbox"
+                      aria-label={
+                        allVisibleSelected ? "Clear selection" : `Select all ${visibleIds.length}`
+                      }
+                      className="h-4 w-4"
+                      disabled={visibleIds.length === 0}
+                      checked={allVisibleSelected}
+                      ref={(node) => {
+                        // Partly selected is neither checked nor unchecked, and
+                        // only the DOM node can say so.
+                        if (node) node.indeterminate = someVisibleSelected;
+                      }}
+                      onChange={toggleAllVisible}
+                    />
+                  </label>
+                </th>
                 <th className="px-2 py-2.5 sm:px-3 font-medium">Task</th>
                 <th className="hidden px-2 py-2.5 sm:px-3 font-medium md:table-cell">Owner</th>
                 <th className="hidden px-2 py-2.5 sm:px-3 font-medium md:table-cell">Schedule</th>
@@ -360,6 +402,20 @@ export function TemplatesScreen({
           onSaved={() => {
             setCreating(false);
             setEditing(null);
+            router.refresh();
+          }}
+        />
+      ) : null}
+
+      {bulkEditing && selected.size > 0 ? (
+        <BulkDrawer
+          templateIds={[...selected]}
+          users={users}
+          categories={categories}
+          onClose={() => setBulkEditing(false)}
+          onSaved={() => {
+            setBulkEditing(false);
+            setSelected(new Set());
             router.refresh();
           }}
         />

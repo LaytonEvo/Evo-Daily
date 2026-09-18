@@ -24,7 +24,7 @@ import {
   removeFutureInstances,
 } from "./recurrence";
 import { getSettings } from "./settings";
-import { addDays, isTimeOfDay, toDbDate, todayInLondon, type DateOnly } from "./time";
+import { addDays, isTimeOfDay, toDateOnly, toDbDate, todayInLondon, type DateOnly } from "./time";
 import { ApiError } from "./errors";
 
 const dateOnly = z
@@ -344,4 +344,140 @@ export async function reassignTemplates(
   }
 
   return templates.length;
+}
+
+/**
+ * The fields a bulk edit may change.
+ *
+ * Every one is optional and absence means "leave it alone" — the whole point
+ * of editing nineteen tasks at once is to change the one thing that is wrong
+ * with all of them, not to overwrite eighteen fields with whatever the form
+ * happened to be showing. `null` is a value here and means clear it, which is
+ * why these are read with `in` rather than `??`.
+ *
+ * Title and description are deliberately absent: they are the fields that make
+ * one task different from another, and setting them in bulk produces nineteen
+ * tasks nobody can tell apart.
+ */
+export const bulkChangesSchema = z
+  .object({
+    assigneeId: z.string().min(1).optional(),
+    categoryId: z.string().nullable().optional(),
+    frequency: z.nativeEnum(Frequency).optional(),
+    daysOfWeek: z.array(z.number().int().min(1).max(7)).optional(),
+    dayOfWeek: z.number().int().min(1).max(7).nullable().optional(),
+    dayOfMonth: z.number().int().min(1).max(31).nullable().optional(),
+    dueTime: z
+      .string()
+      .refine((v) => v === "" || isTimeOfDay(v), "Use HH:mm")
+      .nullable()
+      .optional(),
+    startDate: dateOnly.optional(),
+    endDate: dateOnly.nullable().optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, "Choose at least one thing to change");
+
+export type BulkChanges = z.infer<typeof bulkChangesSchema>;
+
+export type BulkResult = { updated: number };
+
+/**
+ * Apply one set of changes to many tasks.
+ *
+ * Each task is merged with the changes and then put through the *same*
+ * validation and the same update path as a single edit, so a bulk change
+ * cannot produce a task the drawer would have refused — a monthly task with
+ * no day of the month, an end date before its start. That matters more here
+ * than anywhere: one bad submission would otherwise corrupt every task at
+ * once, and the schedule is what generates tomorrow's work.
+ *
+ * Validation runs over all of them before anything is written. A partial bulk
+ * edit is worse than a rejected one, because the half that changed and the
+ * half that did not look identical in the list afterwards.
+ */
+export async function updateTemplates(
+  db: PrismaClient,
+  organisationId: string,
+  templateIds: string[],
+  changes: BulkChanges,
+  today: DateOnly = todayInLondon(),
+): Promise<BulkResult> {
+  const templates = await db.taskTemplate.findMany({
+    where: { id: { in: templateIds }, organisationId },
+  });
+  if (templates.length === 0) return { updated: 0 };
+
+  // A frequency needs the field that frequency is scheduled by, and the tasks
+  // being changed cannot supply it — they are on a different frequency, which
+  // is the reason for the edit. Caught here so the message names the cause
+  // rather than repeating a per-task complaint nineteen times.
+  if (changes.frequency === Frequency.WEEKLY && !changes.dayOfWeek) {
+    throw new ApiError("Moving these to weekly needs a day of the week", 422);
+  }
+  if (changes.frequency === Frequency.MONTHLY && !changes.dayOfMonth) {
+    throw new ApiError("Moving these to monthly needs a day of the month", 422);
+  }
+
+  const merged = templates.map((template) => ({
+    id: template.id,
+    input: mergeChanges(template, changes),
+  }));
+
+  // Pass one: everything, or nothing.
+  for (const { input } of merged) {
+    const parsed = templateInputSchema.safeParse(input);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      throw new ApiError(`${input.title}: ${issue?.message ?? "Invalid change"}`, 422);
+    }
+  }
+
+  // Pass two: the ordinary single-task path, once each. Slower than one
+  // updateMany, and the only way the regeneration, the grace rules and the
+  // owner realignment stay identical to a single edit rather than a second
+  // implementation of them that drifts.
+  for (const { id, input } of merged) {
+    await updateTemplate(db, organisationId, id, templateInputSchema.parse(input), today);
+  }
+
+  return { updated: merged.length };
+}
+
+type ExistingTemplate = {
+  title: string;
+  description: string | null;
+  categoryId: string | null;
+  assigneeId: string;
+  frequency: Frequency;
+  daysOfWeek: number[];
+  dayOfWeek: number | null;
+  dayOfMonth: number | null;
+  dueTime: string | null;
+  startDate: Date;
+  endDate: Date | null;
+  isActive: boolean;
+};
+
+/** Existing values, overlaid with whatever the edit actually named. */
+function mergeChanges(template: ExistingTemplate, changes: BulkChanges) {
+  return {
+    title: template.title,
+    description: template.description,
+    categoryId: "categoryId" in changes ? changes.categoryId : template.categoryId,
+    assigneeId: changes.assigneeId ?? template.assigneeId,
+    frequency: changes.frequency ?? template.frequency,
+    daysOfWeek: changes.daysOfWeek ?? template.daysOfWeek,
+    dayOfWeek: "dayOfWeek" in changes ? changes.dayOfWeek : template.dayOfWeek,
+    dayOfMonth: "dayOfMonth" in changes ? changes.dayOfMonth : template.dayOfMonth,
+    dueTime: "dueTime" in changes ? changes.dueTime : template.dueTime,
+    startDate: changes.startDate ?? toDateOnly(template.startDate),
+    endDate:
+      "endDate" in changes
+        ? changes.endDate
+        : template.endDate
+          ? toDateOnly(template.endDate)
+          : null,
+    isActive: changes.isActive ?? template.isActive,
+  };
 }
