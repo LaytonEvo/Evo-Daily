@@ -120,6 +120,7 @@ async function main() {
   }
 
   // Dependency order.
+  await prisma.signIn.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.absence.deleteMany();
   await prisma.taskInstance.deleteMany();

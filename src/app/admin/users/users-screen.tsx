@@ -12,6 +12,13 @@ import { useToast } from "@/components/ui/toast";
 import { CategoryEditor, type Category } from "./category-editor";
 import { AbsenceEditor, type AbsenceRow } from "./absence-editor";
 import { cn } from "@/lib/utils";
+import {
+  daysBetween,
+  formatDateOnly,
+  formatTimeLondon,
+  toDateOnly,
+  type DateOnly,
+} from "@/lib/time";
 import { generatePassword } from "@/lib/generate-password";
 
 type Person = {
@@ -24,6 +31,8 @@ type Person = {
   managerId: string | null;
   mustChangePassword: boolean;
   activeTasks: number;
+  /** ISO instant of the last successful sign-in, or null for never. */
+  lastSeen: string | null;
 };
 
 export function UsersScreen({
@@ -31,11 +40,15 @@ export function UsersScreen({
   users,
   categories,
   absences,
+  signInLog,
+  today,
 }: {
   currentUserId: string;
   users: Person[];
   categories: Category[];
   absences: AbsenceRow[];
+  signInLog?: React.ReactNode;
+  today: DateOnly;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -81,6 +94,7 @@ export function UsersScreen({
                 <th className="hidden px-2 py-2.5 sm:px-3 font-medium sm:table-cell">Email</th>
                 <th className="px-2 py-2.5 sm:px-3 font-medium">Role</th>
                 <th className="hidden px-2 py-2.5 sm:px-3 text-right font-medium sm:table-cell">Active tasks</th>
+                <th className="hidden px-2 py-2.5 font-medium lg:table-cell sm:px-3">Last seen</th>
                 <th className="hidden px-2 py-2.5 font-medium sm:table-cell sm:px-3">Status</th>
                 <th className="w-12 px-2 py-2.5 sm:w-20 sm:px-3" />
               </tr>
@@ -106,6 +120,13 @@ export function UsersScreen({
                         Deactivated
                       </Badge>
                     ) : null}
+                    {/* The one that matters at any width: an account nobody has
+                        ever opened. */}
+                    {person.lastSeen === null ? (
+                      <Badge variant="muted" className="mt-1 sm:ml-2 sm:mt-0">
+                        never signed in
+                      </Badge>
+                    ) : null}
                     {person.mustChangePassword ? (
                       <Badge variant="muted" className="mt-1 sm:ml-2 sm:mt-0">
                         <span className="sm:hidden">no password</span>
@@ -121,6 +142,9 @@ export function UsersScreen({
                   </td>
                   <td className="hidden px-2 py-2.5 sm:px-3 text-right tabular-nums sm:table-cell">
                     {person.activeTasks}
+                  </td>
+                  <td className="hidden whitespace-nowrap px-2 py-2.5 text-muted-foreground lg:table-cell sm:px-3">
+                    {lastSeenLabel(person.lastSeen, today)}
                   </td>
                   <td className="hidden px-2 py-2.5 sm:table-cell sm:px-3">
                     {person.isActive ? (
@@ -148,6 +172,8 @@ export function UsersScreen({
         people={users.map((u) => ({ id: u.id, name: u.name, isActive: u.isActive }))}
       />
 
+      {signInLog}
+
       {creating || editing ? (
         <PersonDrawer
           person={editing}
@@ -167,6 +193,18 @@ export function UsersScreen({
       ) : null}
     </main>
   );
+}
+
+/** "Today 09:14", "Yesterday", "4 days ago", "12 Sep", or never. */
+function lastSeenLabel(iso: string | null, today: DateOnly): string {
+  if (!iso) return "Never";
+  const at = new Date(iso);
+  const day = toDateOnly(at);
+  if (day === today) return `Today ${formatTimeLondon(at)}`;
+  const days = daysBetween(day, today);
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days} days ago`;
+  return formatDateOnly(day);
 }
 
 function PersonDrawer({

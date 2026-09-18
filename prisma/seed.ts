@@ -42,6 +42,7 @@ async function main() {
   console.log(`Seeding Evolution Golf — today is ${today} (Europe/London)`);
 
   // Wipe in dependency order so the seed is re-runnable.
+  await prisma.signIn.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.absence.deleteMany();
   await prisma.taskInstance.deleteMany();

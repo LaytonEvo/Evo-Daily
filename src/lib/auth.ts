@@ -1,8 +1,9 @@
 import NextAuth, { type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import { Role } from "@prisma/client";
+import { Role, SignInOutcome } from "@prisma/client";
 import { prisma } from "./db";
+import { recordSignIn } from "./sign-ins";
 
 declare module "next-auth" {
   interface Session {
@@ -55,6 +56,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // password take the same time to answer.
         const hash = user?.passwordHash ?? "$2b$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalidi";
         const ok = await bcrypt.compare(password, hash);
+
+        // An email with no account is not logged: there is nobody to attribute
+        // it to, and keeping whatever a stranger typed into a login box is a
+        // liability rather than an audit trail.
+        if (user) {
+          await recordSignIn(prisma, {
+            userId: user.id,
+            organisationId: user.organisationId,
+            outcome: !ok
+              ? SignInOutcome.WRONG_PASSWORD
+              : !user.isActive
+                ? SignInOutcome.DEACTIVATED
+                : SignInOutcome.SUCCESS,
+          });
+        }
+
         if (!user || !ok || !user.isActive) return null;
 
         return {

@@ -27,6 +27,7 @@ model Organisation {
   settings    Settings?
   comments    Comment[]
   attachments Attachment[]
+  signIns     SignIn[]
 }
 
 model User {
@@ -57,6 +58,7 @@ model User {
   covering           Absence[]      @relation("AbsenceCover")
   coveringTasks      AbsenceCover[] @relation("AbsenceCoverPerTask")
   bookedAbsences     Absence[]      @relation("AbsenceCreator")
+  signIns            SignIn[]
 
   @@index([organisationId, isActive])
 }
@@ -297,4 +299,40 @@ model AbsenceCover {
 
   @@unique([absenceId, templateId])
   @@index([templateId])
+}
+
+/// Why a sign-in attempt ended the way it did. Only the outcomes an admin can
+/// do something about: reset a password, or turn an account back on.
+enum SignInOutcome {
+  SUCCESS
+  WRONG_PASSWORD
+  DEACTIVATED
+}
+
+/// One attempt to sign in to a known account.
+///
+/// Answers the question a completion rate cannot: is this person using the
+/// platform at all? A member who never signs in and a member who signs in and
+/// ignores their list look identical on the reports and need opposite
+/// conversations.
+///
+/// Deliberately no IP address and no user agent. The question is whether
+/// somebody is using EvoTasks, not where they were sitting, and a field that
+/// exists gets used for things it was not collected for.
+///
+/// An attempt against an email with no account is not recorded: there is
+/// nobody to attribute it to, and storing whatever an anonymous visitor typed
+/// into a login box is a liability rather than an audit trail.
+model SignIn {
+  id             String        @id @default(cuid())
+  organisationId String
+  userId         String
+  at             DateTime      @default(now())
+  outcome        SignInOutcome
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, at])
+  @@index([userId, at])
 }

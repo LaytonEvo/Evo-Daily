@@ -2,16 +2,19 @@ import { prisma } from "@/lib/db";
 import { requireAdminPage } from "@/lib/guards";
 import { AppShell } from "@/components/app-shell";
 import { listAbsences } from "@/lib/absences";
-import { toDateOnly } from "@/lib/time";
+import { lastSeenByUser, recentSignIns } from "@/lib/sign-ins";
+import { toDateOnly, todayInLondon } from "@/lib/time";
 import { UsersScreen } from "./users-screen";
+import { SignInLog } from "./sign-in-log";
 
 export const metadata = { title: "People · EvoTasks" };
 export const dynamic = "force-dynamic";
 
 export default async function UsersPage() {
   const admin = await requireAdminPage();
+  const today = todayInLondon();
 
-  const [users, categories, absences] = await Promise.all([
+  const [users, categories, absences, signIns, lastSeen] = await Promise.all([
     prisma.user.findMany({
       where: { organisationId: admin.organisationId },
       select: {
@@ -35,6 +38,8 @@ export default async function UsersPage() {
       include: { _count: { select: { templates: true, instances: true } } },
     }),
     listAbsences(prisma, admin.organisationId),
+    recentSignIns(prisma, admin.organisationId),
+    lastSeenByUser(prisma, admin.organisationId),
   ]);
 
   return (
@@ -51,6 +56,7 @@ export default async function UsersPage() {
           managerId: u.managerId,
           mustChangePassword: u.mustChangePassword,
           activeTasks: u._count.assignedTemplates,
+          lastSeen: lastSeen.get(u.id)?.toISOString() ?? null,
         }))}
         categories={categories.map((c) => ({
           id: c.id,
@@ -73,6 +79,10 @@ export default async function UsersPage() {
             coverName: c.cover?.name ?? null,
           })),
         }))}
+        // A server component handed through as a slot: the screen around it is
+        // a client component, and lib/sign-ins reaches for Prisma.
+        today={today}
+        signInLog={<SignInLog rows={signIns} today={today} />}
       />
     </AppShell>
   );

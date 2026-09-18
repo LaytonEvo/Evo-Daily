@@ -39,6 +39,7 @@ export async function databaseAvailable(): Promise<boolean> {
 }
 
 export async function resetDatabase(): Promise<void> {
+  await prisma.signIn.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.absence.deleteMany();
   await prisma.taskInstance.deleteMany();
