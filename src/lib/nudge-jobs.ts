@@ -32,3 +32,16 @@ export function runNudge(
 export function nudgeNames(): string {
   return Object.keys(NUDGE_JOBS).join(", ");
 }
+
+/**
+ * Jobs that choose their own audience.
+ *
+ * The manager digest posts to a channel and the miss alerts go to whichever
+ * managers the last seven days produced — neither takes a list of people, so
+ * asking for one to run them on demand is a question with no answer.
+ */
+const CHOOSES_ITS_OWN_AUDIENCE = new Set<string>(["manager-digest", "miss-alerts"]);
+
+export function takesRecipients(name: NudgeJob): boolean {
+  return !CHOOSES_ITS_OWN_AUDIENCE.has(name);
+}

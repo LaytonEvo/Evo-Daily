@@ -17,7 +17,7 @@
  */
 
 import { PrismaClient } from "@prisma/client";
-import { isNudgeJob, nudgeNames, runNudge } from "../src/lib/nudge-jobs";
+import { isNudgeJob, nudgeNames, runNudge, takesRecipients } from "../src/lib/nudge-jobs";
 
 const prisma = new PrismaClient();
 
@@ -25,6 +25,14 @@ async function main() {
   const job = process.env.NUDGE_JOB || "morning-brief";
   if (!isNudgeJob(job)) {
     throw new Error(`Unknown NUDGE_JOB "${job}". Expected one of: ${nudgeNames()}`);
+  }
+
+  // The digest posts to a channel and the miss alerts go to whichever managers
+  // the data names. Neither takes a list of people, so neither waits for one.
+  if (!takesRecipients(job)) {
+    const outcome = await runNudge(job, prisma);
+    console.log(`\n  ${JSON.stringify(outcome)}\n`);
+    return;
   }
 
   const emails = (process.env.NUDGE_TO ?? "")
