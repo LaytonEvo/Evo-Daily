@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { logRejection, verifySlackRequest } from "@/lib/slack-verify";
+import { logInbound, logRejection, verifySlackRequest } from "@/lib/slack-verify";
 import { handleMessage } from "@/lib/slack-actions";
 import { postMessage } from "@/lib/slack";
 
@@ -48,7 +48,10 @@ export async function POST(request: Request) {
     typeof event.user === "string" &&
     typeof event.channel === "string";
 
-  if (!isUserDm || !event) return NextResponse.json({ ok: true });
+  if (!isUserDm || !event) {
+    logInbound("events", "ignored", `${payload.type}/${event?.type ?? "none"}`);
+    return NextResponse.json({ ok: true });
+  }
 
   // A retry means our first reply was slow, not that it failed. Acting again
   // would double-post; completion itself is idempotent, but the reply is not.
@@ -56,9 +59,14 @@ export async function POST(request: Request) {
 
   const { user, channel, text } = event as { user: string; channel: string; text: string };
 
+  logInbound("events", "message", user);
+
   void handleMessage(prisma, user, text)
     .then((reply) => postMessage(channel, reply.text, reply.blocks))
-    .catch(() => postMessage(channel, "Something went wrong. Nothing was changed."));
+    .catch((error: unknown) => {
+      logInbound("events", "threw", error instanceof Error ? error.message : "unknown error");
+      return postMessage(channel, "Something went wrong. Nothing was changed.");
+    });
 
   return NextResponse.json({ ok: true });
 }

@@ -53,8 +53,16 @@ async function deliver(
   let failed = 0;
   for (const message of messages) {
     const result = await postMessage(message.to, message.text, message.blocks);
-    if (result.ok) sent += 1;
-    else failed += 1;
+    if (result.ok) {
+      sent += 1;
+    } else {
+      failed += 1;
+      // Slack's error code is the whole diagnosis — `not_in_channel` means the
+      // bot was never invited, `channel_not_found` a wrong id. A bare "failed:
+      // 1" in the cron output names neither, and the digest has been posting
+      // into nowhere all week by the time anybody asks.
+      console.warn(`nudge ${job}: ${message.to} failed — ${result.error ?? "unknown"}`);
+    }
   }
   return { job, sent, failed };
 }

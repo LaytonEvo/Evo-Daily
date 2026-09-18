@@ -70,12 +70,23 @@ In Railway, on `evotasks-web`:
 ```
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_SIGNING_SECRET=...
-SLACK_MANAGER_CHANNEL_ID=C...        # optional, for the Monday digest
+SLACK_MANAGER_CHANNEL_ID=C...        # optional, for the Monday digest — see below
 ANTHROPIC_API_KEY=sk-ant-...         # optional, for free-text replies
 ```
 
 Set them in the dashboard, not in a file — they are secrets and this repository
 is not the place for them.
+
+### The manager digest channel
+
+`SLACK_MANAGER_CHANNEL_ID` is the only variable that is not copied from the app
+settings page. In Slack, open the channel, click its name, and the **Channel ID**
+(`C…`) is at the bottom of the About tab. Unset, the Monday digest runs and
+returns without posting.
+
+Then **invite the bot to that channel** — `/invite @EvoTasks` in the channel
+itself. Without it `chat.postMessage` comes back `not_in_channel` and the digest
+fails every Monday. The cron output names the error either way.
 
 ## 3. Point Slack at the app
 

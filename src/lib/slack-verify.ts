@@ -32,6 +32,23 @@ export function logRejection(endpoint: string, reason: string): void {
   console.warn(`slack ${endpoint}: rejected — ${reason}`);
 }
 
+/**
+ * Say that a request arrived and what came of it.
+ *
+ * Without this a tap that does nothing is indistinguishable from a tap that
+ * never reached us, and the two have completely different fixes — one is a bug
+ * here, the other is a switch in the Slack app. A Done button failed in
+ * production with every test passing and no trace on either side of the wire;
+ * this is how that gets diagnosed in one tap rather than an afternoon.
+ *
+ * Outcomes are fixed strings. No payload, no user text and no secret goes near
+ * it — the Slack user id is the most identifying thing here, and it is already
+ * in the People table.
+ */
+export function logInbound(endpoint: string, outcome: string, detail?: string): void {
+  console.log(`slack ${endpoint}: ${outcome}${detail ? ` — ${detail}` : ""}`);
+}
+
 export function slackSigningSecret(): string | null {
   return process.env.SLACK_SIGNING_SECRET || null;
 }
