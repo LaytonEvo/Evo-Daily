@@ -10,6 +10,7 @@ import { formatDateOnlyLong } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { TaskRow } from "./task-row";
 import { Section } from "./section";
+import { DayPlan } from "./day-plan";
 
 export function MyDayScreen({
   user,
@@ -238,6 +239,10 @@ export function MyDayScreen({
                 />
               ))}
             </Section>
+
+            {/* Today only. An overdue task belongs to a day that has already
+                been and gone, so it has no place on this one's clock. */}
+            <DayPlan tasks={[...sections.dueToday, ...sections.doneToday]} today={day.today} />
           </>
         )}
       </div>
