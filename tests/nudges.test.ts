@@ -77,6 +77,65 @@ describeDb("nudges", () => {
     expect(message.text).toContain("overdue from");
   });
 
+  it("goes only to the people named, when any are", async () => {
+    // Sending one person their brief on demand must not DM their colleagues.
+    await prisma.user.update({
+      where: { id: fixture.otherMemberId },
+      data: { slackUserId: "U_BRAD" },
+    });
+    await createTemplate(fixture, {
+      startDate: TODAY,
+      daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+      assigneeId: fixture.memberId,
+    });
+    await createTemplate(fixture, {
+      title: "Brad's task",
+      startDate: TODAY,
+      daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+      assigneeId: fixture.otherMemberId,
+    });
+    await generateInstances(prisma, TODAY, TODAY);
+
+    const everyone = await morningBrief(prisma, { today: TODAY, dryRun: true });
+    expect(everyone.messages?.map((m) => m.to).sort()).toEqual(["U_ALEX", "U_BRAD"]);
+
+    const justBrad = await morningBrief(prisma, {
+      today: TODAY,
+      dryRun: true,
+      onlyUserIds: [fixture.otherMemberId],
+    });
+    expect(justBrad.messages).toHaveLength(1);
+    expect(justBrad.messages![0].to).toBe("U_BRAD");
+  });
+
+  it("narrows the afternoon nudge the same way", async () => {
+    await prisma.user.update({
+      where: { id: fixture.otherMemberId },
+      data: { slackUserId: "U_BRAD" },
+    });
+    await createTemplate(fixture, {
+      startDate: TODAY,
+      daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+      assigneeId: fixture.memberId,
+    });
+    await createTemplate(fixture, {
+      title: "Brad's task",
+      startDate: TODAY,
+      daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+      assigneeId: fixture.otherMemberId,
+    });
+    await generateInstances(prisma, TODAY, TODAY);
+
+    const result = await afternoonNudge(prisma, {
+      today: TODAY,
+      dryRun: true,
+      onlyUserIds: [fixture.memberId],
+    });
+
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages![0].to).toBe("U_ALEX");
+  });
+
   it("says nothing to someone with a clear day", async () => {
     await createTemplate(fixture, { startDate: TODAY, daysOfWeek: [1, 2, 3, 4, 5, 6, 7] });
     await generateInstances(prisma, TODAY, TODAY);

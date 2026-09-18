@@ -21,6 +21,7 @@
     "db:import-tasks": "tsx prisma/import-tasks.ts",
     "db:clear-demo": "tsx prisma/clear-demo.ts",
     "db:realign-today": "tsx prisma/realign-today.ts",
+    "db:send-nudge": "tsx prisma/send-nudge.ts",
     "postinstall": "prisma generate",
     "test:db": "prisma migrate deploy && vitest run"
   },

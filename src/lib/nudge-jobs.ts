@@ -21,8 +21,12 @@ export function isNudgeJob(name: string | null | undefined): name is NudgeJob {
   return typeof name === "string" && name in NUDGE_JOBS;
 }
 
-export function runNudge(name: NudgeJob, db: PrismaClient) {
-  return NUDGE_JOBS[name](db);
+export function runNudge(
+  name: NudgeJob,
+  db: PrismaClient,
+  options: { onlyUserIds?: string[] } = {},
+) {
+  return NUDGE_JOBS[name](db, options);
 }
 
 export function nudgeNames(): string {

@@ -31,6 +31,15 @@ type Options = {
   today?: DateOnly;
   /** Build the messages without sending them — used by the tests. */
   dryRun?: boolean;
+  /**
+   * Restrict the job to these people. Omitted, it goes to everyone it would
+   * normally go to.
+   *
+   * For sending one person their brief on demand — a first run for somebody
+   * who has just been mapped, or a re-send — without DMing colleagues who did
+   * not ask for it.
+   */
+  onlyUserIds?: string[];
 };
 
 async function deliver(
@@ -61,7 +70,11 @@ export async function morningBrief(
 
   const today = options.today ?? todayInLondon();
   const users = await db.user.findMany({
-    where: { isActive: true, slackUserId: { not: null } },
+    where: {
+      isActive: true,
+      slackUserId: { not: null },
+      ...(options.onlyUserIds ? { id: { in: options.onlyUserIds } } : {}),
+    },
     select: { id: true, name: true, slackUserId: true },
   });
 
@@ -127,6 +140,7 @@ export async function afternoonNudge(
     where: {
       status: InstanceStatus.PENDING,
       dueDate: { lte: toDbDate(today) },
+      ...(options.onlyUserIds ? { assigneeId: { in: options.onlyUserIds } } : {}),
     },
     _count: { _all: true },
   });
