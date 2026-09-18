@@ -17,11 +17,18 @@ export function MyDayScreen({
   day,
   notice,
   attachmentsEnabled,
+  readOnly = false,
 }: {
   user: { name: string };
   day: MyDay;
   notice: string | null;
   attachmentsEnabled: boolean;
+  /**
+   * An admin looking at somebody else's day. Same screen, same sections, same
+   * ordering — that is the point, and rebuilding a second read-only version of
+   * it would be a copy that drifts.
+   */
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -116,7 +123,7 @@ export function MyDayScreen({
       <header className="mb-4 flex items-center gap-4 sm:mb-6">
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-2xl font-bold tracking-tight">
-            {greeting()}, {firstName}
+            {readOnly ? `${firstName}'s day` : `${greeting()}, ${firstName}`}
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {formatDateOnlyLong(day.today)}
@@ -134,7 +141,9 @@ export function MyDayScreen({
 
       {allClear ? (
         <div className="mb-6 rounded-lg border border-success/30 bg-success/5 p-4 text-center animate-fade-in">
-          <p className="font-medium text-success">That is your day cleared.</p>
+          <p className="font-medium text-success">
+            {readOnly ? `${firstName}'s day is cleared.` : "That is your day cleared."}
+          </p>
           <p className="mt-1 text-sm text-muted-foreground">
             Nothing else is owed until tomorrow.
           </p>
@@ -179,6 +188,7 @@ export function MyDayScreen({
                 task={task}
                 busy={pendingIds.has(task.id)}
                 attachmentsEnabled={attachmentsEnabled}
+                readOnly={readOnly}
                 requiresReason
                 onToggle={(done, note) => setDone(task, done, note)}
                 onSaveNote={(note) => saveNote(task, note)}
@@ -216,6 +226,7 @@ export function MyDayScreen({
                   task={task}
                   busy={pendingIds.has(task.id)}
                   attachmentsEnabled={attachmentsEnabled}
+                  readOnly={readOnly}
                   onToggle={(done, note) => setDone(task, done, note)}
                   onSaveNote={(note) => saveNote(task, note)}
                 />
@@ -234,6 +245,7 @@ export function MyDayScreen({
                   task={task}
                   busy={pendingIds.has(task.id)}
                   attachmentsEnabled={attachmentsEnabled}
+                  readOnly={readOnly}
                   onToggle={(done, note) => setDone(task, done, note)}
                   onSaveNote={(note) => saveNote(task, note)}
                 />

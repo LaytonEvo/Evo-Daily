@@ -5,7 +5,12 @@ import { Paperclip, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 
-type Attachment = { id: string; filename: string; contentType: string; bytes: number };
+type Attachment = {
+  id: string;
+  filename: string;
+  contentType: string;
+  bytes: number;
+};
 type Comment = {
   id: string;
   body: string;
@@ -25,9 +30,12 @@ type Comment = {
 export function CommentThread({
   instanceId,
   attachmentsEnabled,
+  readOnly = false,
 }: {
   instanceId: string;
   attachmentsEnabled: boolean;
+  /** Reading somebody else's day: the thread shows, the composer does not. */
+  readOnly?: boolean;
 }) {
   const { toast } = useToast();
   const [comments, setComments] = useState<Comment[] | null>(null);
@@ -72,7 +80,9 @@ export function CommentThread({
       setFiles([]);
       await refresh();
     } catch (error) {
-      toast(error instanceof Error ? error.message : "Could not post that.", { tone: "error" });
+      toast(error instanceof Error ? error.message : "Could not post that.", {
+        tone: "error",
+      });
     } finally {
       setBusy(false);
     }
@@ -80,7 +90,11 @@ export function CommentThread({
 
   /** Presign, PUT straight to the bucket, then record the row. */
   async function upload(commentId: string, file: File) {
-    const meta = { filename: file.name, contentType: file.type, bytes: file.size };
+    const meta = {
+      filename: file.name,
+      contentType: file.type,
+      bytes: file.size,
+    };
 
     const start = await fetch(`/api/comments/${commentId}/attachments`, {
       method: "POST",
@@ -131,13 +145,17 @@ export function CommentThread({
       {comments === null ? (
         <p className="mt-2 text-sm text-muted-foreground">Loading…</p>
       ) : comments.length === 0 ? (
-        <p className="mt-2 text-sm italic text-muted-foreground">Nothing yet.</p>
+        <p className="mt-2 text-sm italic text-muted-foreground">
+          Nothing yet.
+        </p>
       ) : (
         <ul className="mt-2 flex flex-col gap-3">
           {comments.map((comment) => (
             <li key={comment.id} className="rounded-xl bg-muted/60 px-3 py-2">
               <div className="flex items-baseline gap-2">
-                <span className="text-sm font-semibold">{comment.author.name}</span>
+                <span className="text-sm font-semibold">
+                  {comment.author.name}
+                </span>
                 <span className="text-xs text-muted-foreground">
                   {new Date(comment.createdAt).toLocaleString("en-GB", {
                     day: "numeric",
@@ -146,7 +164,7 @@ export function CommentThread({
                     minute: "2-digit",
                   })}
                 </span>
-                {comment.mine ? (
+                {comment.mine && !readOnly ? (
                   <button
                     type="button"
                     aria-label="Delete comment"
@@ -168,7 +186,9 @@ export function CommentThread({
                       >
                         <Paperclip className="h-3 w-3" />
                         {file.filename}
-                        <span className="text-muted-foreground">{formatBytes(file.bytes)}</span>
+                        <span className="text-muted-foreground">
+                          {formatBytes(file.bytes)}
+                        </span>
                       </a>
                     </li>
                   ))}
@@ -179,72 +199,82 @@ export function CommentThread({
         </ul>
       )}
 
-      <textarea
-        rows={2}
-        maxLength={2000}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        placeholder="Add a comment"
-        className="mt-3 w-full rounded-xl border border-input bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      />
+      {readOnly ? null : (
+        <>
+          <textarea
+            rows={2}
+            maxLength={2000}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Add a comment"
+            className="mt-3 w-full rounded-xl border border-input bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
 
-      {files.length > 0 ? (
-        <ul className="mt-2 flex flex-wrap gap-2">
-          {files.map((file, i) => (
-            <li
-              key={`${file.name}-${i}`}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-muted px-2 py-1 text-xs"
-            >
-              <Paperclip className="h-3 w-3" />
-              {file.name}
-              <button
-                type="button"
-                aria-label={`Remove ${file.name}`}
-                onClick={() => setFiles((current) => current.filter((_, j) => j !== i))}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+          {files.length > 0 ? (
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {files.map((file, i) => (
+                <li
+                  key={`${file.name}-${i}`}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-muted px-2 py-1 text-xs"
+                >
+                  <Paperclip className="h-3 w-3" />
+                  {file.name}
+                  <button
+                    type="button"
+                    aria-label={`Remove ${file.name}`}
+                    onClick={() =>
+                      setFiles((current) => current.filter((_, j) => j !== i))
+                    }
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
 
-      <div className="mt-2 flex items-center gap-2">
-        <Button size="sm" disabled={!draft.trim() || busy} onClick={() => void post()}>
-          {busy ? "Posting…" : "Post"}
-        </Button>
-
-        {attachmentsEnabled ? (
-          <>
+          <div className="mt-2 flex items-center gap-2">
             <Button
               size="sm"
-              variant="outline"
-              onClick={() => fileInput.current?.click()}
-              disabled={busy}
+              disabled={!draft.trim() || busy}
+              onClick={() => void post()}
             >
-              <Paperclip className="h-4 w-4" />
-              Attach
+              {busy ? "Posting…" : "Post"}
             </Button>
-            <input
-              ref={fileInput}
-              type="file"
-              multiple
-              hidden
-              accept="image/*,application/pdf,text/plain,text/csv"
-              onChange={(e) => {
-                // Read the FileList before clearing the input. A setState
-                // updater runs during the next render, by which point
-                // `value = ""` has already emptied e.target.files and the
-                // updater would append nothing.
-                const picked = Array.from(e.target.files ?? []);
-                // Cleared so picking the same file twice still fires onChange.
-                e.target.value = "";
-                setFiles((current) => [...current, ...picked]);
-              }}
-            />
-          </>
-        ) : null}
-      </div>
+
+            {attachmentsEnabled ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => fileInput.current?.click()}
+                  disabled={busy}
+                >
+                  <Paperclip className="h-4 w-4" />
+                  Attach
+                </Button>
+                <input
+                  ref={fileInput}
+                  type="file"
+                  multiple
+                  hidden
+                  accept="image/*,application/pdf,text/plain,text/csv"
+                  onChange={(e) => {
+                    // Read the FileList before clearing the input. A setState
+                    // updater runs during the next render, by which point
+                    // `value = ""` has already emptied e.target.files and the
+                    // updater would append nothing.
+                    const picked = Array.from(e.target.files ?? []);
+                    // Cleared so picking the same file twice still fires onChange.
+                    e.target.value = "";
+                    setFiles((current) => [...current, ...picked]);
+                  }}
+                />
+              </>
+            ) : null}
+          </div>
+        </>
+      )}
     </div>
   );
 }

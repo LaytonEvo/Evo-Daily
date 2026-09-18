@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Role } from "@prisma/client";
-import { Check, Copy, Plus, RefreshCw, X } from "lucide-react";
+import { Check, Copy, Eye, Plus, RefreshCw, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
@@ -96,7 +96,7 @@ export function UsersScreen({
                 <th className="hidden px-2 py-2.5 sm:px-3 text-right font-medium sm:table-cell">Active tasks</th>
                 <th className="hidden px-2 py-2.5 font-medium lg:table-cell sm:px-3">Last seen</th>
                 <th className="hidden px-2 py-2.5 font-medium sm:table-cell sm:px-3">Status</th>
-                <th className="w-12 px-2 py-2.5 sm:w-20 sm:px-3" />
+                <th className="w-20 px-2 py-2.5 sm:w-28 sm:px-3" />
               </tr>
             </thead>
             <tbody>
@@ -154,9 +154,22 @@ export function UsersScreen({
                     )}
                   </td>
                   <td className="px-2 py-2.5 sm:px-3 text-right">
-                    <Button variant="ghost" size="sm" onClick={() => setEditing(person)}>
-                      Edit
-                    </Button>
+                    <div className="flex items-center justify-end">
+                      {/* Icon only: this column already sets the table's
+                          minimum width, and a second word in it pushes the
+                          whole thing sideways on a phone. */}
+                      <Link
+                        href={`/admin/users/${person.id}/day`}
+                        aria-label={`View ${person.name}'s day`}
+                        title="View their day"
+                        className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Link>
+                      <Button variant="ghost" size="sm" onClick={() => setEditing(person)}>
+                        Edit
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -6,7 +6,7 @@
  * else — no counts to compute client-side, no second round trip.
  */
 
-import { InstanceStatus, type PrismaClient } from "@prisma/client";
+import { InstanceStatus, Role, type PrismaClient } from "@prisma/client";
 import { generateInstances } from "./recurrence";
 import { getSettings } from "./settings";
 import { daysLate } from "./instances";
@@ -125,4 +125,45 @@ export async function getMyDay(
 
 function isEndOfDay(instant: Date): boolean {
   return formatTimeLondon(instant) === "23:59";
+}
+
+export type ViewedDay = {
+  person: { id: string; name: string; isActive: boolean };
+  day: MyDay;
+};
+
+/**
+ * Somebody else's day, for an admin.
+ *
+ * "What is Brad actually looking at this morning?" is a question the reports
+ * screen answers in aggregate and never in the shape the person sees, and an
+ * admin asking it was reduced to reading a table of rows and imagining the
+ * screen.
+ *
+ * Two rules, both enforced here rather than in the page, because a page is one
+ * caller and this is the thing worth getting right:
+ *
+ *  - Admins only. A member reaching this by editing a URL gets nothing.
+ *  - The same organisation. The id comes from the URL, so it is untrusted;
+ *    without this check an admin could read any user id in the database.
+ *
+ * Returns null for both, so the caller renders a 404 and neither case reveals
+ * whether that id exists.
+ */
+export async function getDayFor(
+  db: PrismaClient,
+  actor: { role: Role; organisationId: string },
+  userId: string,
+  today: DateOnly = todayInLondon(),
+): Promise<ViewedDay | null> {
+  if (actor.role !== Role.ADMIN) return null;
+
+  const person = await db.user.findFirst({
+    where: { id: userId, organisationId: actor.organisationId },
+    select: { id: true, name: true, isActive: true, organisationId: true },
+  });
+  if (!person) return null;
+
+  const day = await getMyDay(db, { id: person.id, organisationId: person.organisationId }, today);
+  return { person: { id: person.id, name: person.name, isActive: person.isActive }, day };
 }

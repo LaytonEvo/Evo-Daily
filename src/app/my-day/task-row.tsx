@@ -18,6 +18,7 @@ export function TaskRow({
   busy = false,
   requiresReason = false,
   attachmentsEnabled = false,
+  readOnly = false,
   trailing,
   onToggle,
   onSaveNote,
@@ -28,6 +29,11 @@ export function TaskRow({
   /** Late tasks cannot be ticked without saying what held them up. */
   requiresReason?: boolean;
   attachmentsEnabled?: boolean;
+  /**
+   * Somebody else is looking at this day. The row still opens and still shows
+   * the description, the note and the thread — it just cannot be acted on.
+   */
+  readOnly?: boolean;
   trailing?: React.ReactNode;
   onToggle: (done: boolean, note?: string | null) => void;
   onSaveNote: (note: string | null) => void;
@@ -62,13 +68,19 @@ export function TaskRow({
           type="button"
           role="checkbox"
           aria-checked={done}
-          aria-label={done ? `Mark ${task.title} as not done` : `Mark ${task.title} as done`}
-          disabled={!task.editable || busy}
+          aria-label={
+            readOnly
+              ? `${task.title} — ${done ? "done" : "not done"}`
+              : done
+                ? `Mark ${task.title} as not done`
+                : `Mark ${task.title} as done`
+          }
+          disabled={readOnly || !task.editable || busy}
           onClick={onCheckboxClick}
           className={cn(
             "flex w-14 shrink-0 items-center justify-center rounded-l-lg transition-colors",
             "disabled:opacity-50",
-            !done && "hover:bg-accent",
+            !done && !readOnly && "hover:bg-accent",
           )}
         >
           <span
@@ -208,7 +220,7 @@ export function TaskRow({
               rows={2}
               maxLength={500}
               value={noteDraft}
-              disabled={!task.editable}
+              disabled={readOnly || !task.editable}
               onChange={(e) => setNoteDraft(e.target.value)}
               onBlur={() => {
                 const next = noteDraft.trim();
@@ -220,7 +232,11 @@ export function TaskRow({
           </div>
 
           {/* Mounted only while open, so a day of rows is not a day of fetches. */}
-          <CommentThread instanceId={task.id} attachmentsEnabled={attachmentsEnabled} />
+          <CommentThread
+            instanceId={task.id}
+            attachmentsEnabled={attachmentsEnabled}
+            readOnly={readOnly}
+          />
         </div>
       ) : null}
 

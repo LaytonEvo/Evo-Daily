@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Eye } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireAdminPage } from "@/lib/guards";
 import { AppShell } from "@/components/app-shell";
@@ -67,9 +67,20 @@ export default async function PersonReportPage({
               {formatDateOnly(window.to, { withYear: true })}
             </p>
           </div>
-          <ExportLink
-            href={`/api/admin/reports/export?panel=person&userId=${userId}&${queryString}`}
-          />
+          <div className="flex items-center gap-3">
+            {/* The numbers say what happened; this says what they are looking
+                at right now, which is the question the numbers prompt. */}
+            <Link
+              href={`/admin/users/${userId}/day`}
+              className="inline-flex h-10 items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+            >
+              <Eye className="h-4 w-4" />
+              Their day
+            </Link>
+            <ExportLink
+              href={`/api/admin/reports/export?panel=person&userId=${userId}&${queryString}`}
+            />
+          </div>
         </div>
 
         <section className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
