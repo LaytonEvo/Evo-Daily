@@ -14,10 +14,40 @@ Nothing here changes the app's behaviour for anyone who is not in Slack.
 
 ## 1. Create the Slack app
 
-At <https://api.slack.com/apps> → **Create New App** → **From scratch**, in the
-Evolution Golf workspace.
+At <https://api.slack.com/apps> → **Create New App**, in the Evolution Golf
+workspace. Choose **From a manifest** (YAML) and paste:
 
-**OAuth & Permissions** → Bot Token Scopes:
+```yaml
+display_information:
+  name: EvoTasks
+  description: Your recurring tasks, in Slack.
+  background_color: "#422afb"
+features:
+  bot_user:
+    display_name: EvoTasks
+    always_online: true
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+oauth_config:
+  scopes:
+    bot:
+      - chat:write
+      - im:history
+      - im:write
+      - users:read
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false
+```
+
+That covers the four scopes and the Messages Tab, which are the two things
+easiest to miss. The request URLs are deliberately absent — see step 3.
+
+**Blank app** is the same thing by hand; it is what Slack used to call *From
+scratch*. The scopes are, for reference:
 
 | Scope | Why |
 |---|---|
@@ -26,13 +56,12 @@ Evolution Golf workspace.
 | `im:write` | Open a DM with someone the bot has not messaged before |
 | `users:read` | Resolve member IDs when linking accounts |
 
-Install to the workspace. Copy the **Bot User OAuth Token** (`xoxb-…`).
+Either way: **Install to Workspace**, copy the **Bot User OAuth Token**
+(`xoxb-…`), and take the **Signing Secret** from **Basic Information**.
 
-**Basic Information** → copy the **Signing Secret**.
-
-**App Home** → enable the **Messages Tab** and tick *Allow users to send Slash
-commands and messages from the messages tab*. Without this the bot cannot be
-DMed at all.
+Built by hand rather than from the manifest? **App Home** → enable the
+**Messages Tab** and tick *Allow users to send Slash commands and messages from
+the messages tab*. Without this the bot cannot be DMed at all.
 
 ## 2. Set the variables
 
@@ -50,8 +79,11 @@ is not the place for them.
 
 ## 3. Point Slack at the app
 
-Both URLs need the app deployed and the signing secret set first, or Slack's
-verification handshake fails.
+These come last, and cannot go in the manifest. Slack verifies a request URL
+the moment it is set, and both endpoints check the signature before they answer
+anything — including Slack's own `url_verification` challenge. That is
+deliberate (see Security), but it means the secret has to be set and deployed
+first, or the handshake fails.
 
 **Event Subscriptions** → Request URL:
 
