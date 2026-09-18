@@ -17,6 +17,21 @@ const MAX_AGE_SECONDS = 60 * 5;
 
 export type VerifyResult = { ok: true } | { ok: false; reason: string };
 
+/**
+ * Say on the server why a request was turned away.
+ *
+ * The response stays a bare 401 — an unsigned caller learns nothing. But a
+ * rejection that leaves no trace anywhere is undiagnosable, and the first time
+ * anyone points Slack at this they get a red cross and no way to tell a wrong
+ * secret from a skewed clock.
+ *
+ * The reason is a fixed string from the list above. No secret, no signature and
+ * no body ever goes near it.
+ */
+export function logRejection(endpoint: string, reason: string): void {
+  console.warn(`slack ${endpoint}: rejected — ${reason}`);
+}
+
 export function slackSigningSecret(): string | null {
   return process.env.SLACK_SIGNING_SECRET || null;
 }

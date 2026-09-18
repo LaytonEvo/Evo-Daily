@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { verifySlackRequest } from "@/lib/slack-verify";
+import { logRejection, verifySlackRequest } from "@/lib/slack-verify";
 import { completeFromButton } from "@/lib/slack-actions";
 import { respond } from "@/lib/slack";
 
@@ -18,6 +18,7 @@ export async function POST(request: Request) {
 
   const verified = verifySlackRequest(raw, request.headers);
   if (!verified.ok) {
+    logRejection("interactive", verified.reason);
     return NextResponse.json({ error: "unauthorised" }, { status: 401 });
   }
 

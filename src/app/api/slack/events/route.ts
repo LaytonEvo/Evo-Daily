@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { verifySlackRequest } from "@/lib/slack-verify";
+import { logRejection, verifySlackRequest } from "@/lib/slack-verify";
 import { handleMessage } from "@/lib/slack-actions";
 import { postMessage } from "@/lib/slack";
 
@@ -18,7 +18,9 @@ export async function POST(request: Request) {
 
   const verified = verifySlackRequest(raw, request.headers);
   if (!verified.ok) {
-    // 401 and nothing else: an unsigned caller learns nothing about why.
+    // 401 and nothing else: an unsigned caller learns nothing about why. The
+    // reason goes to the server log, where whoever is wiring this up can see it.
+    logRejection("events", verified.reason);
     return NextResponse.json({ error: "unauthorised" }, { status: 401 });
   }
 
