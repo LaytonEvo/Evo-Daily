@@ -19,6 +19,7 @@ import { z } from "zod";
 import {
   DEFAULT_DAYS_OF_WEEK,
   generateInstances,
+  realignToday,
   realignTodayToOwner,
   regenerateFutureInstances,
   removeFutureInstances,
@@ -49,6 +50,7 @@ export const templateInputSchema = z
     startDate: dateOnly,
     endDate: dateOnly.nullish(),
     isActive: z.boolean().default(true),
+    isStarred: z.boolean().default(false),
   })
   .superRefine((value, ctx) => {
     if (value.frequency === Frequency.DAILY && value.daysOfWeek.length === 0) {
@@ -131,6 +133,7 @@ export async function createTemplate(
       dueTime: input.dueTime || null,
       startDate: toDbDate(input.startDate),
       isActive: input.isActive,
+      isStarred: input.isStarred,
       ...scheduleFieldsFor(input),
     },
   });
@@ -173,6 +176,7 @@ export async function updateTemplate(
       dueTime: input.dueTime || null,
       startDate: toDbDate(input.startDate),
       isActive: input.isActive,
+      isStarred: input.isStarred,
       ...scheduleFieldsFor(input),
     },
   });
@@ -185,9 +189,10 @@ export async function updateTemplate(
     await removeFutureInstances(db, template.id, today);
   }
 
-  // The owner is the exception: an open task due today belongs to whoever owns
-  // it now, not whoever owned it this morning.
-  await realignTodayToOwner(db, template.id, template.assigneeId, today);
+  // Today's instance follows the edit while nobody has acted on it. Only the
+  // owner used to, which left a corrected title sitting wrong on the list its
+  // owner was reading all day.
+  await realignToday(db, template, today);
 
   return template;
 }
@@ -401,6 +406,7 @@ export async function duplicateTemplate(
       dayOfWeek: source.dayOfWeek,
       dayOfMonth: source.dayOfMonth,
       dueTime: source.dueTime,
+      isStarred: source.isStarred,
       // A copy starts today, not on the original's start date — nobody wants
       // a duplicate that back-fills six months of history.
       startDate: toDbDate(today),
@@ -480,6 +486,7 @@ export const bulkChangesSchema = z
     startDate: dateOnly.optional(),
     endDate: dateOnly.nullable().optional(),
     isActive: z.boolean().optional(),
+    isStarred: z.boolean().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, "Choose at least one thing to change");
 
@@ -562,6 +569,7 @@ type ExistingTemplate = {
   startDate: Date;
   endDate: Date | null;
   isActive: boolean;
+  isStarred: boolean;
 };
 
 /** Existing values, overlaid with whatever the edit actually named. */
@@ -584,5 +592,6 @@ function mergeChanges(template: ExistingTemplate, changes: BulkChanges) {
           ? toDateOnly(template.endDate)
           : null,
     isActive: changes.isActive ?? template.isActive,
+    isStarred: changes.isStarred ?? template.isStarred,
   };
 }

@@ -82,13 +82,21 @@ export function ReportsScreen({ report }: { report: OrgReport }) {
             <div>
               <CardTitle>Trend</CardTitle>
               <CardDescription>
-                Daily completion rate, with a 7-day moving average.
+                Daily completion rate, with a 7-day moving average. Narrow it to one person
+                without changing anything else on the page.
               </CardDescription>
             </div>
             <ExportLink href={`/api/admin/reports/export?panel=trend&${query}`} />
           </CardHeader>
           <CardContent>
-            <TrendChart points={report.trend} />
+            <TrendChart
+              points={report.trend}
+              pointsByUser={report.trendByUser}
+              people={report.leaderboard.map((row) => ({
+                userId: row.userId,
+                name: row.name,
+              }))}
+            />
           </CardContent>
         </Card>
 

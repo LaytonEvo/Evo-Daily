@@ -363,6 +363,49 @@ export async function realignTodayToOwner(
 }
 
 /**
+ * Bring today's still-open instance in line with the template it came from.
+ *
+ * An instance freezes its title, owner and category when it is generated, which
+ * is what keeps a report readable months later — renaming a task must not
+ * rewrite what people were actually asked to do in June.
+ *
+ * But that rule was being applied to work nobody had done yet. Fixing a typo at
+ * 09:00 left the wrong wording on the list its owner was looking at all day,
+ * and a change of cut-off time did not move today's deadline. So today's
+ * instance follows the template while it is still PENDING: nothing has happened
+ * to it, so there is no record to protect.
+ *
+ * Anything already completed, missed or excused is left exactly as it was, and
+ * so is every earlier day. Those are the record.
+ */
+export async function realignToday(
+  db: DbClient,
+  template: {
+    id: string;
+    title: string;
+    assigneeId: string;
+    categoryId: string | null;
+    dueTime: string | null;
+  },
+  today: DateOnly,
+): Promise<number> {
+  const { count } = await db.taskInstance.updateMany({
+    where: {
+      templateId: template.id,
+      status: InstanceStatus.PENDING,
+      dueDate: toDbDate(today),
+    },
+    data: {
+      title: template.title,
+      assigneeId: template.assigneeId,
+      categoryId: template.categoryId,
+      dueAt: dueAtFor(today, template.dueTime),
+    },
+  });
+  return count;
+}
+
+/**
  * Drop future pending instances without regenerating — used when a template is
  * deactivated. All history is left intact; templates are never hard-deleted.
  */

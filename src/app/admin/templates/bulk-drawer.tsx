@@ -27,7 +27,8 @@ type Field =
   | "dueTime"
   | "startDate"
   | "endDate"
-  | "isActive";
+  | "isActive"
+  | "isStarred";
 
 /**
  * Change one thing across many tasks.
@@ -66,6 +67,7 @@ export function BulkDrawer({
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState("");
   const [isActive, setIsActive] = useState(true);
+  const [isStarred, setIsStarred] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -97,6 +99,7 @@ export function BulkDrawer({
     if (on.has("startDate")) changes.startDate = startDate;
     if (on.has("endDate")) changes.endDate = endDate || null;
     if (on.has("isActive")) changes.isActive = isActive;
+    if (on.has("isStarred")) changes.isStarred = isStarred;
     return changes;
   }
 
@@ -265,6 +268,19 @@ export function BulkDrawer({
                 <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
                 <p className="mt-1 text-xs text-muted-foreground">
                   Leave empty to remove an end date and let these run indefinitely.
+                </p>
+              </Row>
+
+              <Row label="Pinned" field="isStarred" on={on} toggle={toggle}>
+                <Select
+                  value={isStarred ? "yes" : "no"}
+                  onChange={(e) => setIsStarred(e.target.value === "yes")}
+                >
+                  <option value="yes">Pinned to the top of their day</option>
+                  <option value="no">Not pinned</option>
+                </Select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Pinning everything is the same as pinning nothing.
                 </p>
               </Row>
 

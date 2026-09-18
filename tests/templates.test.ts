@@ -202,6 +202,7 @@ describeDb("reassigning a task", () => {
         daysOfWeek: template.daysOfWeek,
         startDate: TODAY,
         isActive: true,
+        isStarred: false,
       },
       TODAY,
     );

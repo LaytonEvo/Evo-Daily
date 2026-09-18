@@ -18,6 +18,7 @@ export function MyDayScreen({
   notice,
   attachmentsEnabled,
   readOnly = false,
+  upcoming = false,
 }: {
   user: { name: string };
   day: MyDay;
@@ -29,6 +30,11 @@ export function MyDayScreen({
    * it would be a copy that drifts.
    */
   readOnly?: boolean;
+  /**
+   * A day that has not started. Nothing on it is late and nothing is done, so
+   * the headings stop saying "today" and the ring stops implying progress.
+   */
+  upcoming?: boolean;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -123,14 +129,20 @@ export function MyDayScreen({
       <header className="mb-4 flex items-center gap-4 sm:mb-6">
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-2xl font-bold tracking-tight">
-            {readOnly ? `${firstName}'s day` : `${greeting()}, ${firstName}`}
+            {upcoming
+              ? `${firstName}'s next day`
+              : readOnly
+                ? `${firstName}'s day`
+                : `${greeting()}, ${firstName}`}
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {formatDateOnlyLong(day.today)}
           </p>
           <p className="mt-1 text-sm font-medium">
             {owedTotal === 0
-              ? "Nothing due today."
+              ? upcoming
+                ? "Nothing scheduled."
+                : "Nothing due today."
               : allClear
                 ? "All done for today."
                 : `${owedDone} of ${owedTotal} done`}
@@ -219,7 +231,10 @@ export function MyDayScreen({
               </div>
             ) : null}
 
-            <Section title="Today" count={sections.dueToday.length}>
+            <Section
+              title={upcoming ? "Scheduled" : "Today"}
+              count={sections.dueToday.length}
+            >
               {sections.dueToday.map((task) => (
                 <TaskRow
                   key={task.id}

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Frequency } from "@prisma/client";
-import { Trash2, X } from "lucide-react";
+import { Star, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
@@ -56,6 +56,7 @@ export function TemplateDrawer({
   const [startDate, setStartDate] = useState(template?.startDate ?? today);
   const [endDate, setEndDate] = useState(template?.endDate ?? "");
   const [isActive, setIsActive] = useState(template?.isActive ?? true);
+  const [isStarred, setIsStarred] = useState(template?.isStarred ?? false);
 
   const [preview, setPreview] = useState<{ description: string; labels: string[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -126,6 +127,7 @@ export function TemplateDrawer({
       startDate,
       endDate: endDate || null,
       isActive,
+      isStarred,
     };
 
     const response = await fetch(
@@ -398,10 +400,35 @@ export function TemplateDrawer({
                 Active
               </label>
 
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4"
+                  checked={isStarred}
+                  onChange={(e) => setIsStarred(e.target.checked)}
+                />
+                <span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Star
+                      className={cn(
+                        "h-4 w-4",
+                        isStarred ? "fill-warning text-warning" : "text-muted-foreground",
+                      )}
+                    />
+                    Pin to the top of their day
+                  </span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    Sits above everything else on the list, whatever time it is due. Star
+                    everything and nothing is starred.
+                  </span>
+                </span>
+              </label>
+
               {template ? (
                 <p className="text-xs text-muted-foreground">
-                  Saving changes future instances only. Today&rsquo;s tasks and all history keep
-                  the title, owner and category they were created with.
+                  Saving updates today&rsquo;s task as well, while it is still open. Anything
+                  already ticked, and every earlier day, keeps the title, owner and category it
+                  was created with.
                 </p>
               ) : null}
 

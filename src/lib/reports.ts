@@ -110,6 +110,8 @@ export type OrgReport = {
   };
   leaderboard: LeaderboardRow[];
   trend: TrendPoint[];
+  /** The same series per person, keyed by user id. Empty for anyone with no instances. */
+  trendByUser: Record<string, TrendPoint[]>;
   problemTasks: ProblemTask[];
   categories: CategoryRow[];
 };
@@ -240,6 +242,36 @@ function groupBy<T, K extends string | null>(items: T[], key: (item: T) => K): M
   return map;
 }
 
+/**
+ * The daily completion series for one set of instances.
+ *
+ * Days with nothing due stay in with `assigned: 0` and a null rate: the chart
+ * draws them as a gap rather than a dip, and dropping them would make a
+ * weekend look like a bad day.
+ */
+export function buildTrend(
+  instances: Pick<InstanceRow, "dueDate" | "status" | "wasLate">[],
+  window: Pick<ReportWindow, "from" | "to">,
+): TrendPoint[] {
+  const byDate = groupBy(instances, (i) => toDateOnly(i.dueDate));
+  const points: TrendPoint[] = [];
+
+  for (let date = window.from; compareDateOnly(date, window.to) <= 0; date = addDays(date, 1)) {
+    const rows = byDate.get(date) ?? [];
+    const dayTotals = totalsOf(rows);
+    points.push({
+      date,
+      assigned: dayTotals.assigned,
+      completed: dayTotals.completed,
+      completionRate: dayTotals.completionRate,
+      movingAverage: null,
+    });
+  }
+
+  applyMovingAverage(points, 7);
+  return points;
+}
+
 export async function buildOrgReport(
   db: PrismaClient,
   organisationId: string,
@@ -300,24 +332,16 @@ export async function buildOrgReport(
     .sort(compareLeaderboardRows);
 
   // --- Trend ---------------------------------------------------------------
-  const byDate = groupBy(instances, (i) => toDateOnly(i.dueDate));
-  const trend: TrendPoint[] = [];
-  for (
-    let date = window.from;
-    compareDateOnly(date, window.to) <= 0;
-    date = addDays(date, 1)
-  ) {
-    const rows = byDate.get(date) ?? [];
-    const dayTotals = totalsOf(rows);
-    trend.push({
-      date,
-      assigned: dayTotals.assigned,
-      completed: dayTotals.completed,
-      completionRate: dayTotals.completionRate,
-      movingAverage: null,
-    });
+  const trend = buildTrend(instances, window);
+
+  // One series per person as well as the whole org. Computed here rather than
+  // fetched on demand because the instances are already loaded and a window is
+  // at most a few hundred rows — a round trip per person to re-slice data the
+  // page is holding would be the expensive way round.
+  const trendByUser: Record<string, TrendPoint[]> = {};
+  for (const [userId, rows] of byUser.entries()) {
+    trendByUser[userId] = buildTrend(rows, window);
   }
-  applyMovingAverage(trend, 7);
 
   // --- Problem tasks -------------------------------------------------------
   const byTemplate = groupBy(instances, (i) => i.templateId);
@@ -371,6 +395,7 @@ export async function buildOrgReport(
     },
     leaderboard,
     trend,
+    trendByUser,
     problemTasks,
     categories: categoryRows,
   };

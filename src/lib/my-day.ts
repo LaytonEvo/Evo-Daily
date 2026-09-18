@@ -13,6 +13,7 @@ import { daysLate } from "./instances";
 import {
   addDays,
   compareDateOnly,
+  maxDateOnly,
   formatTimeLondon,
   toDateOnly,
   toDbDate,
@@ -32,6 +33,8 @@ export type MyDayTask = {
   daysLate: number;
   categoryName: string | null;
   categoryColour: string | null;
+  /** Pinned to the top of the day, above the clock. */
+  starred: boolean;
   /** Whether this member may still tick or untick it themselves. */
   editable: boolean;
 };
@@ -80,38 +83,28 @@ export async function getMyDay(
     },
     include: {
       category: { select: { name: true, colour: true } },
-      template: { select: { description: true } },
+      // isStarred is read live rather than frozen onto the instance: starring
+      // is a statement about what matters now, so it has to reach today's list.
+      template: { select: { description: true, isStarred: true } },
     },
     orderBy: [{ dueDate: "asc" }, { dueAt: "asc" }, { title: "asc" }],
   });
 
-  const tasks: MyDayTask[] = rows.map((row) => {
-    const dueDate = toDateOnly(row.dueDate);
-    return {
-      id: row.id,
-      title: row.title,
-      description: row.template.description,
-      dueDate,
-      // A cut-off time is only worth showing when one was actually set.
-      dueTimeLabel:
-        row.dueAt && !isEndOfDay(row.dueAt) ? formatTimeLondon(row.dueAt) : null,
-      status: row.status,
-      note: row.note,
-      wasLate: row.wasLate,
-      daysLate: daysLate(dueDate, today),
-      categoryName: row.category?.name ?? null,
-      categoryColour: row.category?.colour ?? null,
-      // MISSED instances never reach this screen, so anything here is inside
-      // the grace window by construction.
-      editable: row.status !== InstanceStatus.MISSED,
-    };
-  });
+  const tasks: MyDayTask[] = rows.map((row) => toTask(row, today));
+
+  // Starred first, then the order the query already put them in. A star is a
+  // manager saying "this one before the others", which is only worth anything
+  // if it survives a task with an earlier cut-off time sitting below it.
+  const byStar = <T extends { starred: boolean }>(rows: T[]): T[] => [
+    ...rows.filter((r) => r.starred),
+    ...rows.filter((r) => !r.starred),
+  ];
 
   const open = tasks.filter((t) => t.status === InstanceStatus.PENDING);
   const done = tasks.filter((t) => t.status === InstanceStatus.COMPLETED);
 
-  const overdue = open.filter((t) => compareDateOnly(t.dueDate, today) < 0);
-  const dueToday = open.filter((t) => t.dueDate === today);
+  const overdue = byStar(open.filter((t) => compareDateOnly(t.dueDate, today) < 0));
+  const dueToday = byStar(open.filter((t) => t.dueDate === today));
 
   // Everything cleared from what was owed — today's work, and any catch-up on
   // an overdue item.
@@ -127,9 +120,92 @@ function isEndOfDay(instant: Date): boolean {
   return formatTimeLondon(instant) === "23:59";
 }
 
+type InstanceRow = {
+  id: string;
+  title: string;
+  dueDate: Date;
+  dueAt: Date | null;
+  status: InstanceStatus;
+  note: string | null;
+  wasLate: boolean;
+  category: { name: string; colour: string | null } | null;
+  template: { description: string | null; isStarred: boolean };
+};
+
+/** One row, as the screen wants it. Shared so a preview cannot drift. */
+function toTask(row: InstanceRow, today: DateOnly): MyDayTask {
+  const dueDate = toDateOnly(row.dueDate);
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.template.description,
+    dueDate,
+    // A cut-off time is only worth showing when one was actually set.
+    dueTimeLabel: row.dueAt && !isEndOfDay(row.dueAt) ? formatTimeLondon(row.dueAt) : null,
+    status: row.status,
+    note: row.note,
+    wasLate: row.wasLate,
+    daysLate: daysLate(dueDate, today),
+    categoryName: row.category?.name ?? null,
+    categoryColour: row.category?.colour ?? null,
+    starred: row.template.isStarred,
+    // MISSED instances never reach this screen, so anything here is inside
+    // the grace window by construction.
+    editable: row.status !== InstanceStatus.MISSED,
+  };
+}
+
+/**
+ * A day that has not happened yet.
+ *
+ * Deliberately not getMyDay with a later date: that would pull in the grace
+ * window as well, and tomorrow's screen would open on a list of things that
+ * are overdue *today* relabelled as tomorrow's backlog. A future day is just
+ * what is due on it.
+ *
+ * Nothing on it is done, nothing on it is late, so the sections collapse to
+ * one and the progress ring reads 0 of n — which is what a day nobody has
+ * started looks like.
+ */
+export async function getUpcomingDay(
+  db: PrismaClient,
+  user: { id: string; organisationId: string },
+  date: DateOnly,
+): Promise<MyDay> {
+  const rows = await db.taskInstance.findMany({
+    where: {
+      assigneeId: user.id,
+      organisationId: user.organisationId,
+      dueDate: toDbDate(date),
+    },
+    include: {
+      category: { select: { name: true, colour: true } },
+      template: { select: { description: true, isStarred: true } },
+    },
+    orderBy: [{ dueAt: "asc" }, { title: "asc" }],
+  });
+
+  const tasks = rows
+    .filter((row) => row.status !== InstanceStatus.EXCUSED)
+    .map((row) => toTask(row, date));
+  const dueToday = [...tasks.filter((t) => t.starred), ...tasks.filter((t) => !t.starred)];
+
+  return {
+    today: date,
+    overdue: [],
+    dueToday,
+    doneToday: [],
+    owedTotal: dueToday.length,
+    owedDone: 0,
+  };
+}
+
 export type ViewedDay = {
   person: { id: string; name: string; isActive: boolean };
   day: MyDay;
+  /** The date being shown. */
+  on: DateOnly;
+  isToday: boolean;
 };
 
 /**
@@ -154,7 +230,7 @@ export async function getDayFor(
   db: PrismaClient,
   actor: { role: Role; organisationId: string },
   userId: string,
-  today: DateOnly = todayInLondon(),
+  options: { on?: DateOnly; today?: DateOnly } = {},
 ): Promise<ViewedDay | null> {
   if (actor.role !== Role.ADMIN) return null;
 
@@ -164,6 +240,23 @@ export async function getDayFor(
   });
   if (!person) return null;
 
-  const day = await getMyDay(db, { id: person.id, organisationId: person.organisationId }, today);
-  return { person: { id: person.id, name: person.name, isActive: person.isActive }, day };
+  const today = options.today ?? todayInLondon();
+  // Only forward, and a past date clamps to today rather than being echoed
+  // back — returning "you are looking at last Tuesday" above today's list is
+  // worse than not offering last Tuesday at all. Looking back is the report's
+  // job, and it answers better: what was completed, what was missed, and when.
+  const on = maxDateOnly(options.on ?? today, today);
+  const who = { id: person.id, organisationId: person.organisationId };
+
+  const day =
+    compareDateOnly(on, today) > 0
+      ? await getUpcomingDay(db, who, on)
+      : await getMyDay(db, who, today);
+
+  return {
+    person: { id: person.id, name: person.name, isActive: person.isActive },
+    day,
+    on,
+    isToday: on === today,
+  };
 }

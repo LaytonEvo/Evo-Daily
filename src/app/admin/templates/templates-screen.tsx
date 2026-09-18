@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Frequency } from "@prisma/client";
-import { Copy, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
+import { Copy, Pencil, Plus, Search, Star, Trash2, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
@@ -28,6 +28,7 @@ export type TemplateRow = {
   startDate: string;
   endDate: string | null;
   isActive: boolean;
+  isStarred: boolean;
   scheduleLabel: string;
   completionRate: number | null;
   assignedLast30: number;
@@ -300,6 +301,12 @@ export function TemplatesScreen({
                       >
                         {template.title}
                       </button>
+                      {template.isStarred ? (
+                        <Star
+                          aria-label="Pinned to the top of their day"
+                          className="ml-1.5 inline h-3.5 w-3.5 align-[-2px] fill-warning text-warning"
+                        />
+                      ) : null}
                       {template.dueTime ? (
                         <span className="ml-2 hidden text-xs text-muted-foreground md:inline">
                           by {template.dueTime}

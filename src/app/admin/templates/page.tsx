@@ -17,7 +17,7 @@ export default async function TemplatesPage() {
     prisma.taskTemplate.findMany({
       where: { organisationId: admin.organisationId },
       include: { assignee: { select: { id: true, name: true } } },
-      orderBy: [{ isActive: "desc" }, { title: "asc" }],
+      orderBy: [{ isActive: "desc" }, { isStarred: "desc" }, { title: "asc" }],
     }),
     prisma.user.findMany({
       where: { organisationId: admin.organisationId },
@@ -60,6 +60,7 @@ export default async function TemplatesPage() {
       startDate: toDateOnly(template.startDate),
       endDate: template.endDate ? toDateOnly(template.endDate) : null,
       isActive: template.isActive,
+      isStarred: template.isStarred,
       scheduleLabel: describeSchedule(template),
       completionRate: totals?.completionRate ?? null,
       assignedLast30: totals?.assigned ?? 0,

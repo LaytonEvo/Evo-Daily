@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { InstanceStatus } from "@prisma/client";
-import { Check, ChevronDown, Clock, StickyNote } from "lucide-react";
+import { Check, ChevronDown, Clock, Star, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CommentThread } from "./comment-thread";
 import { cn } from "@/lib/utils";
@@ -101,6 +101,14 @@ export function TaskRow({
                 done && "text-muted-foreground line-through",
               )}
             >
+              {/* Sitting at the top is only half the message: without a mark,
+                  the first row looks like the first row. */}
+              {task.starred ? (
+                <Star
+                  aria-label="Pinned to the top"
+                  className="mr-1 inline h-3.5 w-3.5 align-[-2px] fill-warning text-warning"
+                />
+              ) : null}
               {task.title}
             </p>
             <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">

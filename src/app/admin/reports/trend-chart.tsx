@@ -9,10 +9,64 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useState } from "react";
+import { Select } from "@/components/ui/input";
 import type { TrendPoint } from "@/lib/reports";
 import { formatDateOnly } from "@/lib/time";
 
-export function TrendChart({ points }: { points: TrendPoint[] }) {
+export type TrendPerson = { userId: string; name: string };
+
+/**
+ * The org's completion trend, or one person's.
+ *
+ * The filter is local state rather than a URL parameter on purpose: the series
+ * for every person is already on the page, so switching between them is
+ * instant, and it is a way of looking at one chart rather than a different
+ * report. Everything else on the screen keeps meaning what it says.
+ */
+export function TrendChart({
+  points,
+  pointsByUser,
+  people,
+}: {
+  points: TrendPoint[];
+  pointsByUser?: Record<string, TrendPoint[]>;
+  people?: TrendPerson[];
+}) {
+  const [userId, setUserId] = useState("");
+  const shown = userId ? (pointsByUser?.[userId] ?? []) : points;
+  const canFilter = Boolean(people?.length && pointsByUser);
+
+  return (
+    <div>
+      {canFilter ? (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <Select
+            className="h-9 w-auto"
+            aria-label="Whose trend to show"
+            value={userId}
+            onChange={(e) => setUserId(e.target.value)}
+          >
+            <option value="">Everyone</option>
+            {people!.map((person) => (
+              <option key={person.userId} value={person.userId}>
+                {person.name}
+              </option>
+            ))}
+          </Select>
+          {userId ? (
+            <span className="text-xs text-muted-foreground">
+              One person&rsquo;s days. The tiles above are still everyone.
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+      <TrendLines points={shown} />
+    </div>
+  );
+}
+
+function TrendLines({ points }: { points: TrendPoint[] }) {
   const data = points.map((point) => ({
     date: point.date,
     label: formatDateOnly(point.date),
