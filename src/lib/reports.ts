@@ -29,6 +29,7 @@ import {
   addDays,
   compareDateOnly,
   daysBetween,
+  eachDateInRange,
   minDateOnly,
   toDateOnly,
   toDbDate,
@@ -512,4 +513,73 @@ export async function templateCompletionRates(
   const rows = await loadInstances(db, organisationId, window);
   const byTemplate = groupBy(rows, (r) => r.templateId);
   return new Map([...byTemplate.entries()].map(([id, group]) => [id, totalsOf(group)]));
+}
+
+/** Seven days including the day itself — "the running week" on the chart. */
+export const RUNNING_WEEK_DAYS = 7;
+
+export type DayBreakdown = {
+  date: DateOnly;
+  completed: number;
+  missed: number;
+  /** Completed, but after the deadline. A subset of `completed`. */
+  late: number;
+  /** Genuinely owed that day. Excused days are reported nowhere in here. */
+  assigned: number;
+  /** This day and the six before it, so a single bad Monday is not a trend. */
+  weekCompleted: number;
+  weekMissed: number;
+};
+
+/**
+ * One row per day in the window, including the days nothing was due.
+ *
+ * Empty days are kept rather than dropped: a chart that silently skips them
+ * draws a fortnight of holiday as a continuous run of work, and the gap is
+ * usually the thing worth seeing.
+ *
+ * The running-week totals count backwards from each day, including days before
+ * the window — the caller passes every row it has, and the window only decides
+ * which days are drawn. Without that the first six columns of any chart would
+ * under-report, and they are the ones nearest the eye.
+ */
+export type DatedInstance = {
+  dueDate: DateOnly | Date;
+  status: InstanceStatus;
+  wasLate: boolean;
+};
+
+export function dailyBreakdown(
+  rows: DatedInstance[],
+  window: Pick<ReportWindow, "from" | "to">,
+): DayBreakdown[] {
+  type Tally = { completed: number; missed: number; late: number; assigned: number };
+  const byDay = new Map<DateOnly, Tally>();
+
+  for (const row of rows) {
+    const date = toDateOnly(row.dueDate);
+    const day: Tally = byDay.get(date) ?? { completed: 0, missed: 0, late: 0, assigned: 0 };
+    if (row.status !== InstanceStatus.EXCUSED) day.assigned += 1;
+    if (row.status === InstanceStatus.COMPLETED) {
+      day.completed += 1;
+      if (row.wasLate) day.late += 1;
+    }
+    if (row.status === InstanceStatus.MISSED) day.missed += 1;
+    byDay.set(date, day);
+  }
+
+  return eachDateInRange(window.from, window.to).map((date) => {
+    const day = byDay.get(date) ?? { completed: 0, missed: 0, late: 0, assigned: 0 };
+
+    let weekCompleted = 0;
+    let weekMissed = 0;
+    for (let back = 0; back < RUNNING_WEEK_DAYS; back += 1) {
+      const earlier = byDay.get(addDays(date, -back));
+      if (!earlier) continue;
+      weekCompleted += earlier.completed;
+      weekMissed += earlier.missed;
+    }
+
+    return { date, ...day, weekCompleted, weekMissed };
+  });
 }

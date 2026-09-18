@@ -5,11 +5,13 @@ import { prisma } from "@/lib/db";
 import { requireAdminPage } from "@/lib/guards";
 import { AppShell } from "@/components/app-shell";
 import { HistoryTable } from "./history-table";
+import { DayChart } from "./day-chart";
+import { PersonWindowPicker } from "./person-window-picker";
 import { ExportLink } from "../reports-screen";
 import { storageEnabled } from "@/lib/storage";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { buildPersonReport, buildWindow } from "@/lib/reports";
+import { buildPersonReport, buildWindow, dailyBreakdown } from "@/lib/reports";
 import { formatDateOnly } from "@/lib/time";
 import { cn, formatRate } from "@/lib/utils";
 
@@ -39,6 +41,7 @@ export default async function PersonReportPage({
   if (!report) notFound();
 
   const queryString = `from=${window.from}&to=${window.to}`;
+  const days = dailyBreakdown(report.history, window);
 
   return (
     <AppShell user={admin} active="reports">
@@ -66,6 +69,9 @@ export default async function PersonReportPage({
               {formatDateOnly(window.from, { withYear: true })} to{" "}
               {formatDateOnly(window.to, { withYear: true })}
             </p>
+            <div className="mt-3">
+              <PersonWindowPicker userId={userId} from={window.from} to={window.to} />
+            </div>
           </div>
           <div className="flex items-center gap-3">
             {/* The numbers say what happened; this says what they are looking
@@ -112,6 +118,19 @@ export default async function PersonReportPage({
         </section>
 
         <div className="flex flex-col gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Day by day</CardTitle>
+              <CardDescription>
+                What was cleared and what was not, each day in this window. Tap a day for the
+                tasks behind it.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DayChart days={days} rows={report.history} />
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Missed tasks</CardTitle>
