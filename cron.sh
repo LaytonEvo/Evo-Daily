@@ -24,14 +24,17 @@
 #
 #   JOB=generate         5 0 * * *      (00:05 UTC)
 #   JOB=sweep           15 0 * * *      (00:15 UTC)
-#   JOB=morning-brief   30 7 * * 1-5    (08:30 London in summer — see below)
-#   JOB=afternoon-nudge  0 15 * * 1-5
-#   JOB=manager-digest   0 7 * * 1
+#   JOB=morning-brief    0 11 * * 1-5   (12:00 London in summer — see below)
+#   JOB=afternoon-nudge  0 15 * * 1-5   (16:00 London in summer)
+#   JOB=manager-digest   0 7 * * 1      (08:00 Monday London in summer)
+#   JOB=miss-alerts      0 7 * * 1      (08:00 Monday London in summer)
 #
 # The Phase 3 nudge times are the exception: those are read by a person, so an
-# hour of drift is the difference between a brief at 08:30 and one at 09:30.
-# The times above are correct for BST; subtract an hour from the UTC hour when
-# the clocks go back, or drive them from a scheduler that understands London.
+# hour of drift is the difference between a brief at midday and one at 11am.
+# The times above are correct for BST. When the clocks go back, ADD an hour to
+# each UTC hour: London is UTC+1 in summer and UTC in winter, so the same UTC
+# time lands an hour EARLIER once BST ends, not later. Or drive them from a
+# scheduler that understands London.
 set -eu
 
 : "${APP_URL:?APP_URL is not set}"

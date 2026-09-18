@@ -11,10 +11,10 @@ export const dynamic = "force-dynamic";
  * no per-service timezone, and the London times they are meant to land at hold
  * only in summer:
  *
- *   morning-brief    30 7 * * 1-5   (08:30 London in BST)
+ *   morning-brief     0 11 * * 1-5  (12:00 London in BST)
  *   afternoon-nudge   0 15 * * 1-5  (16:00)
  *   manager-digest    0 7 * * 1     (08:00 Monday)
- *   miss-alerts      20 0 * * *     (just after the sweep)
+ *   miss-alerts       0 7 * * 1     (08:00 Monday London in BST)
  *
  * Every job is a no-op when Slack is not configured.
  *

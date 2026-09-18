@@ -67,7 +67,7 @@ async function deliver(
   return { job, sent, failed };
 }
 
-/** 08:30 weekdays — DM each active member their list for the day. */
+/** Midday on weekdays — DM each active member their list for the day. */
 export async function morningBrief(
   db: PrismaClient,
   options: Options = {},

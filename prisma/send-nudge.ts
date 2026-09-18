@@ -1,7 +1,7 @@
 /**
  * Send one nudge, on demand, to named people only.
  *
- * The scheduled jobs go to everybody they apply to, which is right at 08:30
+ * The scheduled jobs go to everybody they apply to, which is right at midday
  * and wrong when somebody has just been mapped to Slack and wants to see what
  * the bot actually sends. This runs the same job for a named few, so nobody
  * else gets a surprise DM out of the blue.

@@ -202,10 +202,17 @@ and `wasLate` still records that they did, so the metric keeps its teeth.
 | Job | Schedule (London) | Action |
 | --- | --- | --- |
 | `generate` | 00:05 daily | Generate instances from today to today + `generationHorizonDays` |
-| `sweep` | 00:15 daily | Mark stale `PENDING` instances `MISSED`, then fire miss alerts |
-| `morning-brief` | 08:30 weekdays | Phase 3 |
-| `afternoon-nudge` | 16:00 weekdays | Phase 3 |
-| `manager-digest` | Monday 08:00 | Phase 3 |
+| `sweep` | 00:15 daily | Mark stale `PENDING` instances `MISSED` |
+| `morning-brief` | 12:00 weekdays | DM each mapped member their open tasks, with Done buttons |
+| `afternoon-nudge` | 16:00 weekdays | DM only those with something still open |
+| `manager-digest` | Monday 08:00 | Last week's numbers to the manager channel |
+| `miss-alerts` | Monday 08:00 | DM a manager about anyone on 3+ misses in seven days |
+
+Two DMs a day is the whole personal cadence, and deliberately so: midday, when
+there is still time to act on it, and 16:00 for whatever is left. The miss
+alerts ran nightly at first, which meant one bad week for one person sent their
+manager the same message seven times — a rolling seven-day window only needs
+reading once a week.
 
 Every job requires `x-cron-secret` and answers 401 without it. Belt and braces:
 `/my-day` also calls `ensureInstancesForToday()` on load, so a failed cron or a

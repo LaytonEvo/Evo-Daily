@@ -127,19 +127,23 @@ summer. Each is a separate service running one `curl`, the same pattern as the
 existing `cron-sweep` and `cron-generate`:
 
 ```
-POST /api/cron/nudge/morning-brief     30 7 * * 1-5
+POST /api/cron/nudge/morning-brief      0 11 * * 1-5
 POST /api/cron/nudge/afternoon-nudge    0 15 * * 1-5
 POST /api/cron/nudge/manager-digest     0 7 * * 1
-POST /api/cron/nudge/miss-alerts       20 0 * * *
+POST /api/cron/nudge/miss-alerts        0 7 * * 1
 ```
 
 with header `x-cron-secret: $CRON_SECRET`.
 
-Those schedules are UTC and correct for BST, which is what the London times
-in the code comments mean in summer: 08:30, 16:00 and 08:00 Monday. When the
-clocks go back, subtract an hour from each UTC hour, or the brief arrives at
-09:30. `miss-alerts` only has to land after midnight London, so it needs no
-adjustment.
+Those schedules are UTC and correct for BST: 12:00, 16:00, and 08:00 Monday for
+both of the Monday jobs. **When the clocks go back, add an hour to each UTC
+hour.** London is UTC+1 in summer and UTC in winter, so the same UTC time lands
+an hour *earlier* once BST ends — `0 11` would put the midday brief out at 11am.
+
+Two DMs a day is the entire personal cadence. Miss alerts were nightly to begin
+with, which meant one bad week for one person sent their manager the same
+message every night until it aged out of the window; a rolling seven-day count
+only needs reading once a week, so it now goes out with the Monday digest.
 
 The job name goes in the path rather than a query string on purpose. A Railway
 cron service is a curl image with a single string as its start command, and a
