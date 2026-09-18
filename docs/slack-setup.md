@@ -116,13 +116,24 @@ summer. Each is a separate service running one `curl`, the same pattern as the
 existing `cron-sweep` and `cron-generate`:
 
 ```
-POST /api/cron/nudge?job=morning-brief     30 8 * * 1-5
-POST /api/cron/nudge?job=afternoon-nudge    0 16 * * 1-5
-POST /api/cron/nudge?job=manager-digest     0 8 * * 1
-POST /api/cron/nudge?job=miss-alerts       20 0 * * *
+POST /api/cron/nudge/morning-brief     30 7 * * 1-5
+POST /api/cron/nudge/afternoon-nudge    0 15 * * 1-5
+POST /api/cron/nudge/manager-digest     0 7 * * 1
+POST /api/cron/nudge/miss-alerts       20 0 * * *
 ```
 
-with header `authorization: Bearer $CRON_SECRET`.
+with header `x-cron-secret: $CRON_SECRET`.
+
+Those schedules are UTC and correct for BST, which is what the London times
+in the code comments mean in summer: 08:30, 16:00 and 08:00 Monday. When the
+clocks go back, subtract an hour from each UTC hour, or the brief arrives at
+09:30. `miss-alerts` only has to land after midnight London, so it needs no
+adjustment.
+
+The job name goes in the path rather than a query string on purpose. A Railway
+cron service is a curl image with a single string as its start command, and a
+`?` in that string does not reach curl — it comes back a usage error, while the
+same command without one runs fine.
 
 ## What the bot does
 

@@ -43,7 +43,9 @@ case "$JOB" in
     ENDPOINT="$APP_URL/api/cron/$JOB"
     ;;
   morning-brief|afternoon-nudge|manager-digest|miss-alerts)
-    ENDPOINT="$APP_URL/api/cron/nudge?job=$JOB"
+    # Path form, not ?job= — see src/app/api/cron/nudge/[job]/route.ts. Both
+    # work; this one survives being embedded in a container start command.
+    ENDPOINT="$APP_URL/api/cron/nudge/$JOB"
     ;;
   *)
     echo "Unknown JOB: $JOB" >&2
