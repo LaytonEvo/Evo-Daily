@@ -26,6 +26,7 @@ import {
 import { getSettings } from "./settings";
 import { addDays, isTimeOfDay, toDateOnly, toDbDate, todayInLondon, type DateOnly } from "./time";
 import { ApiError } from "./errors";
+import { deleteObject } from "./storage";
 
 const dateOnly = z
   .string()
@@ -231,10 +232,62 @@ export async function setTemplateActive(
  * cover rows on any booked absence. This is the accidental duplicate, the
  * draft, the task typed in twice.
  */
+export type DeleteImpact = {
+  id: string;
+  title: string;
+  /** Instances that are no longer PENDING: completed, missed or excused. */
+  recorded: number;
+  comments: number;
+  attachments: number;
+  /** Nothing has happened to it, so deleting rewrites no report. */
+  clean: boolean;
+};
+
+/**
+ * What deleting these would actually cost.
+ *
+ * Read before asking, not after refusing. "This will remove 41 days from every
+ * report that counted them" is a decision somebody can make; a 409 that says
+ * no is not, and the person who wants it gone still wants it gone.
+ */
+export async function deleteImpact(
+  db: PrismaClient,
+  organisationId: string,
+  templateIds: string[],
+): Promise<DeleteImpact[]> {
+  const templates = await db.taskTemplate.findMany({
+    where: { id: { in: templateIds }, organisationId },
+    select: { id: true, title: true },
+    orderBy: { title: "asc" },
+  });
+
+  return Promise.all(
+    templates.map(async (template) => {
+      const [recorded, comments, attachments] = await Promise.all([
+        db.taskInstance.count({
+          where: { templateId: template.id, status: { not: InstanceStatus.PENDING } },
+        }),
+        db.comment.count({ where: { instance: { templateId: template.id } } }),
+        db.attachment.count({
+          where: { comment: { instance: { templateId: template.id } } },
+        }),
+      ]);
+      return {
+        ...template,
+        recorded,
+        comments,
+        attachments,
+        clean: recorded === 0 && comments === 0,
+      };
+    }),
+  );
+}
+
 export async function deleteTemplate(
   db: PrismaClient,
   organisationId: string,
   templateId: string,
+  options: { force?: boolean } = {},
 ) {
   const existing = await db.taskTemplate.findFirst({
     where: { id: templateId, organisationId },
@@ -249,19 +302,71 @@ export async function deleteTemplate(
     db.comment.count({ where: { instance: { templateId } } }),
   ]);
 
-  if (recorded > 0 || comments > 0) {
+  // Still the default, and still the right default: the completion rate in
+  // last month's report should not change because somebody tidied up. But it
+  // is now a question rather than a verdict — an admin who has read what it
+  // costs and still wants it gone is allowed to say so.
+  if ((recorded > 0 || comments > 0) && !options.force) {
     throw new ApiError(
       `"${existing.title}" has ${describeRecord(recorded, comments)}. Turn it off instead — ` +
-        `it will stop generating, and past reports will still read correctly.`,
+        `it will stop generating, and past reports will still read correctly. ` +
+        `Delete anyway only if you accept that those reports will change.`,
       409,
     );
   }
+
+  // Read before the rows go: the attachments cascade away with them, and the
+  // objects in the bucket do not.
+  const attachments = await db.attachment.findMany({
+    where: { comment: { instance: { templateId } } },
+    select: { storageKey: true },
+  });
 
   // Audit rows and comment rows cascade from the instances; absence cover rows
   // cascade from the template itself.
   await db.taskInstance.deleteMany({ where: { templateId } });
   await db.taskTemplate.delete({ where: { id: templateId } });
+
+  // After the rows are gone, so a storage outage cannot leave a task
+  // undeletable. The worst case is an object nothing references.
+  for (const attachment of attachments) await deleteObject(attachment.storageKey);
+
   return existing;
+}
+
+export type BulkDeleteResult = {
+  deleted: number;
+  /** Refused for want of `force`, with what each one would have cost. */
+  blocked: DeleteImpact[];
+};
+
+/**
+ * Delete many. Without `force` the ones carrying a record are left alone and
+ * reported back, rather than failing the whole call — selecting nineteen tasks
+ * and being told no because one of them has history helps nobody, and deleting
+ * all nineteen because eighteen were clean would be worse.
+ */
+export async function deleteTemplates(
+  db: PrismaClient,
+  organisationId: string,
+  templateIds: string[],
+  options: { force?: boolean } = {},
+): Promise<BulkDeleteResult> {
+  const impacts = await deleteImpact(db, organisationId, templateIds);
+
+  let deleted = 0;
+  const blocked: DeleteImpact[] = [];
+
+  for (const impact of impacts) {
+    if (!impact.clean && !options.force) {
+      blocked.push(impact);
+      continue;
+    }
+    await deleteTemplate(db, organisationId, impact.id, { force: true });
+    deleted += 1;
+  }
+
+  return { deleted, blocked };
 }
 
 function describeRecord(recorded: number, comments: number): string {

@@ -57,12 +57,18 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 }
 
-/** Only for a task with no record. Anything else comes back 409. */
-export async function DELETE(_request: Request, { params }: Params) {
+/**
+ * A task with no record goes without ceremony. One with history comes back 409
+ * describing what it would cost, and only `?force=true` gets past that — which
+ * the drawer sends after showing the admin that description and being told to
+ * go ahead.
+ */
+export async function DELETE(request: Request, { params }: Params) {
   try {
     const admin = await requireApiAdmin();
     const { id } = await params;
-    const template = await deleteTemplate(prisma, admin.organisationId, id);
+    const force = new URL(request.url).searchParams.get("force") === "true";
+    const template = await deleteTemplate(prisma, admin.organisationId, id, { force });
     return NextResponse.json({ id: template.id, deleted: true });
   } catch (error) {
     return errorResponse(error);

@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { errorResponse, requireApiAdmin } from "@/lib/guards";
-import { bulkChangesSchema, reassignTemplates, updateTemplates } from "@/lib/templates";
+import {
+  bulkChangesSchema,
+  deleteImpact,
+  deleteTemplates,
+  reassignTemplates,
+  updateTemplates,
+} from "@/lib/templates";
 
 const reassignSchema = z.object({
   action: z.literal("reassign"),
@@ -16,7 +22,25 @@ const updateSchema = z.object({
   changes: bulkChangesSchema,
 });
 
-const schema = z.discriminatedUnion("action", [reassignSchema, updateSchema]);
+const deleteSchema = z.object({
+  action: z.literal("delete"),
+  templateIds: z.array(z.string()).min(1),
+  /** Only ever sent after the admin has been shown what it costs. */
+  force: z.boolean().optional(),
+});
+
+/** Read-only: what a delete would remove. Nothing is written. */
+const impactSchema = z.object({
+  action: z.literal("impact"),
+  templateIds: z.array(z.string()).min(1),
+});
+
+const schema = z.discriminatedUnion("action", [
+  reassignSchema,
+  updateSchema,
+  deleteSchema,
+  impactSchema,
+]);
 
 /**
  * Bulk edits. Future instances only, exactly as a single edit is.
@@ -39,6 +63,18 @@ export async function POST(request: Request) {
         body.assigneeId,
       );
       return NextResponse.json({ reassigned: count });
+    }
+
+    if (body.action === "impact") {
+      const impacts = await deleteImpact(prisma, admin.organisationId, body.templateIds);
+      return NextResponse.json({ impacts });
+    }
+
+    if (body.action === "delete") {
+      const result = await deleteTemplates(prisma, admin.organisationId, body.templateIds, {
+        force: body.force ?? false,
+      });
+      return NextResponse.json(result);
     }
 
     const result = await updateTemplates(

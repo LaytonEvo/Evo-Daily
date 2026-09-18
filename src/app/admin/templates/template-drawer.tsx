@@ -62,11 +62,13 @@ export function TemplateDrawer({
   const [pending, setPending] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  // A task nothing has happened to yet can go; anything with a day on the
-  // record is history and the server refuses it. Saying so before the click
-  // beats an error afterwards.
+  // A task nothing has happened to yet goes without ceremony. One with days on
+  // the record is history: it can still go, but the confirmation says what that
+  // costs and has to be accepted by name. Saying which of the two this is
+  // before the click beats an error afterwards.
   const recorded = template?.recordedDays ?? 0;
-  const deletable = Boolean(template) && recorded === 0;
+  const hasRecord = Boolean(template) && recorded > 0;
+  const [acceptedRisk, setAcceptedRisk] = useState(false);
 
   // Live preview: "Next 3 due dates: Thu 28 Aug, Fri 29 Aug, Mon 1 Sep."
   useEffect(() => {
@@ -151,14 +153,20 @@ export function TemplateDrawer({
     setError(null);
     setPending(true);
 
-    const response = await fetch(`/api/admin/templates/${template.id}`, {
-      method: "DELETE",
-    });
+    // force only ever goes with an explicit tick, and the server refuses
+    // without it — the checkbox is the record of the decision, not a shortcut
+    // past the rule.
+    const force = hasRecord && acceptedRisk;
+    const response = await fetch(
+      `/api/admin/templates/${template.id}${force ? "?force=true" : ""}`,
+      { method: "DELETE" },
+    );
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
       setError(payload.error ?? "Could not delete that task.");
       setPending(false);
       setConfirmingDelete(false);
+      setAcceptedRisk(false);
       return;
     }
 
@@ -397,13 +405,13 @@ export function TemplateDrawer({
                 </p>
               ) : null}
 
-              {/* A disabled bin with only a tooltip to explain it is a dead end
-                  on a phone, where there is no hover. */}
-              {template && !deletable ? (
+              {/* Said here as well as in the confirmation, because on a phone
+                  there is no hover and a bin with no explanation is a dare. */}
+              {hasRecord ? (
                 <p className="text-xs text-muted-foreground">
-                  {recorded === 1 ? "One day is" : `${recorded} days are`} already on the record,
-                  so this one can be turned off but not deleted — deleting it would change every
-                  report that counted it.
+                  {recorded === 1 ? "One day is" : `${recorded} days are`} already on the record.
+                  Turning it off keeps those reports readable; deleting it changes every report
+                  that counted them.
                 </p>
               ) : null}
 
@@ -421,21 +429,46 @@ export function TemplateDrawer({
                 <p className="text-sm font-medium">
                   Delete {template?.title}? This cannot be undone.
                 </p>
+
+                {hasRecord ? (
+                  <>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {recorded === 1
+                        ? "Its one recorded day goes with it, along with every comment and attachment on it."
+                        : `Its ${recorded} recorded days go with it, along with every comment and attachment on them.`}{" "}
+                      Completion rates that counted {recorded === 1 ? "that day" : "those days"}{" "}
+                      will change, including in reports already sent.
+                    </p>
+                    <label className="mt-2 flex cursor-pointer items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 h-4 w-4"
+                        checked={acceptedRisk}
+                        onChange={(e) => setAcceptedRisk(e.target.checked)}
+                      />
+                      <span>I accept that past reports will change.</span>
+                    </label>
+                  </>
+                ) : null}
+
                 <div className="mt-2 flex gap-2">
                   <Button
                     type="button"
                     variant="destructive"
                     size="sm"
-                    disabled={pending}
+                    disabled={pending || (hasRecord && !acceptedRisk)}
                     onClick={() => void onDelete()}
                   >
-                    {pending ? "Deleting…" : "Delete"}
+                    {pending ? "Deleting…" : hasRecord ? "Delete anyway" : "Delete"}
                   </Button>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => setConfirmingDelete(false)}
+                    onClick={() => {
+                      setConfirmingDelete(false);
+                      setAcceptedRisk(false);
+                    }}
                   >
                     Keep it
                   </Button>
@@ -450,11 +483,11 @@ export function TemplateDrawer({
                   variant="ghost"
                   size="icon"
                   aria-label={`Delete ${template.title}`}
-                  disabled={pending || !deletable || confirmingDelete}
+                  disabled={pending || confirmingDelete}
                   title={
-                    deletable
-                      ? `Delete ${template.title}`
-                      : `${recorded} ${recorded === 1 ? "day is" : "days are"} on the record — turn it off instead`
+                    hasRecord
+                      ? `Delete ${template.title} — ${recorded} ${recorded === 1 ? "day is" : "days are"} on the record`
+                      : `Delete ${template.title}`
                   }
                   onClick={() => setConfirmingDelete(true)}
                   className="text-muted-foreground hover:text-destructive"

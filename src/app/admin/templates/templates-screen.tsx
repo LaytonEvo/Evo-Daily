@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Frequency } from "@prisma/client";
-import { Copy, Pencil, Plus, Search, Users } from "lucide-react";
+import { Copy, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { useToast } from "@/components/ui/toast";
 import { cn, formatRate } from "@/lib/utils";
 import { TemplateDrawer } from "./template-drawer";
 import { BulkDrawer } from "./bulk-drawer";
+import { DeleteDrawer } from "./delete-drawer";
 
 export type TemplateRow = {
   id: string;
@@ -58,6 +59,7 @@ export function TemplatesScreen({
   const [editing, setEditing] = useState<TemplateRow | null>(null);
   const [creating, setCreating] = useState(false);
   const [bulkEditing, setBulkEditing] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const filtered = useMemo(
     () =>
@@ -215,6 +217,15 @@ export function TemplatesScreen({
           <Button variant="outline" size="sm" onClick={() => setBulkEditing(true)}>
             <Pencil className="h-4 w-4" />
             Edit selected
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setBulkDeleting(true)}
+            className="text-muted-foreground hover:text-destructive"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete
           </Button>
           <span className="text-xs text-muted-foreground">Future instances only.</span>
           <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
@@ -402,6 +413,18 @@ export function TemplatesScreen({
           onSaved={() => {
             setCreating(false);
             setEditing(null);
+            router.refresh();
+          }}
+        />
+      ) : null}
+
+      {bulkDeleting && selected.size > 0 ? (
+        <DeleteDrawer
+          templateIds={[...selected]}
+          onClose={() => setBulkDeleting(false)}
+          onDeleted={() => {
+            setBulkDeleting(false);
+            setSelected(new Set());
             router.refresh();
           }}
         />
