@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { requireAdminPage } from "@/lib/guards";
 import { AppShell } from "@/components/app-shell";
 import { buildOrgReport, buildWindow } from "@/lib/reports";
+import { todayInLondon } from "@/lib/time";
 import { ReportsScreen } from "./reports-screen";
 
 export const metadata = { title: "Reports · EvoTasks" };
@@ -15,17 +16,18 @@ export default async function ReportsPage({
   const admin = await requireAdminPage();
   const params = await searchParams;
 
+  const today = todayInLondon();
   const window = buildWindow({
     days: params.days ? Number(params.days) : undefined,
     from: params.from,
     to: params.to,
-  });
+  }, today);
 
   const report = await buildOrgReport(prisma, admin.organisationId, window);
 
   return (
     <AppShell user={admin} active="reports" title="Reports">
-      <ReportsScreen report={report} />
+      <ReportsScreen report={report} today={today} />
     </AppShell>
   );
 }

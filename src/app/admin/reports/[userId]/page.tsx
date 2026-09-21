@@ -6,13 +6,13 @@ import { requireAdminPage } from "@/lib/guards";
 import { AppShell } from "@/components/app-shell";
 import { HistoryTable } from "./history-table";
 import { DayChart } from "./day-chart";
-import { PersonWindowPicker } from "./person-window-picker";
+import { WindowPicker } from "../window-picker";
 import { ExportLink } from "../reports-screen";
 import { storageEnabled } from "@/lib/storage";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { buildPersonReport, buildWindow, dailyBreakdown } from "@/lib/reports";
-import { formatDateOnly } from "@/lib/time";
+import { buildPersonReport, buildWindow, dailyBreakdown, singleDayLabel } from "@/lib/reports";
+import { formatDateOnly, todayInLondon } from "@/lib/time";
 import { cn, formatRate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -31,11 +31,15 @@ export default async function PersonReportPage({
   // it survives a refresh and can be sent to someone.
   const filter = (["completed", "late", "missed"] as const).find((f) => f === query.filter);
 
-  const window = buildWindow({
-    days: query.days ? Number(query.days) : undefined,
-    from: query.from,
-    to: query.to,
-  });
+  const today = todayInLondon();
+  const window = buildWindow(
+    {
+      days: query.days ? Number(query.days) : undefined,
+      from: query.from,
+      to: query.to,
+    },
+    today,
+  );
 
   const report = await buildPersonReport(prisma, admin.organisationId, userId, window);
   if (!report) notFound();
@@ -66,11 +70,22 @@ export default async function PersonReportPage({
               ) : null}
             </h1>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              {formatDateOnly(window.from, { withYear: true })} to{" "}
-              {formatDateOnly(window.to, { withYear: true })}
+              {window.days === 1 ? (
+                <>{singleDayLabel(window)}</>
+              ) : (
+                <>
+                  {formatDateOnly(window.from, { withYear: true })} to{" "}
+                  {formatDateOnly(window.to, { withYear: true })}
+                </>
+              )}
             </p>
             <div className="mt-3">
-              <PersonWindowPicker userId={userId} from={window.from} to={window.to} />
+              <WindowPicker
+                basePath={`/admin/reports/${userId}`}
+                today={today}
+                from={window.from}
+                to={window.to}
+              />
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -116,6 +131,19 @@ export default async function PersonReportPage({
             active={filter === "missed"}
           />
         </section>
+
+        {report.totals.outstanding > 0 ? (
+          // Over a month this is a footnote. Over today it is most of the list,
+          // and a completion rate of 15% at ten in the morning reads as a
+          // disaster rather than a morning.
+          <p className="-mt-2 mb-6 text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">
+              {report.totals.outstanding} still open
+            </span>{" "}
+            — inside the catch-up window, so neither done nor missed. They count against the
+            completion rate until they are ticked off or run out of time.
+          </p>
+        ) : null}
 
         <div className="flex flex-col gap-6">
           <Card>

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn, formatDelta, formatRate } from "@/lib/utils";
 import { formatDateOnly } from "@/lib/time";
-import type { LeaderboardRow, OrgReport } from "@/lib/reports";
+import { singleDayLabel, type LeaderboardRow, type OrgReport } from "@/lib/reports";
 import { WindowPicker } from "./window-picker";
 import { TrendChart } from "./trend-chart";
 
@@ -18,8 +18,9 @@ type SortKey = keyof Pick<
 
 type PeopleFilter = "all" | "completed" | "missed";
 
-export function ReportsScreen({ report }: { report: OrgReport }) {
+export function ReportsScreen({ report, today }: { report: OrgReport; today: string }) {
   const { window, totals, deltas } = report;
+  const versus = window.days === 1 ? "vs the day before" : "vs previous period";
   const query = `from=${window.from}&to=${window.to}`;
   // Narrows the leaderboard to the people who actually make up the number on
   // the tile you tapped.
@@ -29,15 +30,26 @@ export function ReportsScreen({ report }: { report: OrgReport }) {
     <main className="mx-auto w-full max-w-5xl pb-16 pt-2">
       <div className="mb-5">
         <p className="text-sm text-muted-foreground">
-          {formatDateOnly(window.from, { withYear: true })} to{" "}
-          {formatDateOnly(window.to, { withYear: true })} · {window.days} days
+          {window.days === 1 ? (
+            <>{singleDayLabel(window)}</>
+          ) : (
+            <>
+              {formatDateOnly(window.from, { withYear: true })} to{" "}
+              {formatDateOnly(window.to, { withYear: true })} · {window.days} days
+            </>
+          )}
           {window.requestedTo !== window.to ? " (clipped to today)" : ""}
         </p>
       </div>
 
       <div className="mb-6">
         <Suspense fallback={null}>
-          <WindowPicker from={window.from} to={window.to} />
+          <WindowPicker
+            basePath="/admin/reports"
+            today={today}
+            from={window.from}
+            to={window.to}
+          />
         </Suspense>
       </div>
 
@@ -48,18 +60,21 @@ export function ReportsScreen({ report }: { report: OrgReport }) {
           value={formatRate(totals.completionRate)}
           delta={deltas.completionRate}
           sub={`${totals.completed} of ${totals.assigned} due`}
+          versus={versus}
         />
         <Stat
           label="On-time rate"
           value={formatRate(totals.onTimeRate)}
           delta={deltas.onTimeRate}
           sub={`${totals.onTime} of ${totals.completed} completed`}
+          versus={versus}
         />
         <Stat
           label="Completed"
           value={String(totals.completed)}
           count={deltas.completed}
           sub="tasks ticked off"
+          versus={versus}
           onClick={() => setPeople(people === "completed" ? "all" : "completed")}
           active={people === "completed"}
         />
@@ -69,10 +84,13 @@ export function ReportsScreen({ report }: { report: OrgReport }) {
           count={deltas.missed}
           invert
           sub={`${totals.outstanding} still open`}
+          versus={versus}
           onClick={() => setPeople(people === "missed" ? "all" : "missed")}
           active={people === "missed"}
         />
       </section>
+
+      {totals.outstanding > 0 ? <StillOpen count={totals.outstanding} /> : null}
 
       <div className="flex flex-col gap-6">
         <Leaderboard rows={report.leaderboard} query={query} people={people} />
@@ -131,6 +149,7 @@ function Stat({
   invert = false,
   onClick,
   active = false,
+  versus = "vs previous period",
 }: {
   label: string;
   value: string;
@@ -141,6 +160,7 @@ function Stat({
   /** Present when the tile narrows the leaderboard below. */
   onClick?: () => void;
   active?: boolean;
+  versus?: string;
 }) {
   const change = delta ?? (count === undefined ? null : count / 100);
   const isUp = change !== null && change > 0;
@@ -170,10 +190,10 @@ function Stat({
             {isUp ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
             {delta !== undefined
               ? formatDelta(delta)
-              : `${count! > 0 ? "+" : ""}${count} vs previous`}
+              : `${count! > 0 ? "+" : ""}${count} ${versus}`}
           </p>
         ) : (
-          <p className="mt-2 text-xs text-muted-foreground">vs previous period</p>
+          <p className="mt-2 text-xs text-muted-foreground">{versus}</p>
         )}
       </CardContent>
     </Card>
@@ -506,5 +526,24 @@ export function ExportLink({ href, label = "CSV" }: { href: string; label?: stri
       <Download className="h-3.5 w-3.5" />
       {label}
     </a>
+  );
+}
+
+/**
+ * The caveat a short window needs and a long one benefits from.
+ *
+ * A task that is still open counts in the denominator of the completion rate
+ * but in neither half of the numerator, which is correct — it has not been
+ * done and it has not been missed. Over thirty days that is a rounding error.
+ * Over today it is most of the list, and "completion rate 15%" at ten in the
+ * morning reads as a disaster rather than a morning.
+ */
+function StillOpen({ count }: { count: number }) {
+  return (
+    <p className="mb-6 -mt-3 text-sm text-muted-foreground">
+      <span className="font-medium text-foreground">{count} still open</span>{" "}
+      — inside the catch-up window, so neither done nor missed. They count against the completion
+      rate until they are ticked off or run out of time.
+    </p>
   );
 }

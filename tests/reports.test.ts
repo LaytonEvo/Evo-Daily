@@ -56,6 +56,48 @@ describe("buildWindow", () => {
     expect(previous.to).toBe(addDays(window.from, -1));
     expect(previous.days).toBe(window.days);
   });
+
+  it("reports a single day as one day, not a range of zero", () => {
+    const window = buildWindow({ from: TODAY, to: TODAY }, TODAY);
+    expect(window.from).toBe(TODAY);
+    expect(window.to).toBe(TODAY);
+    expect(window.days).toBe(1);
+  });
+
+  it("names today and yesterday the way somebody would say them", () => {
+    expect(buildWindow({ from: TODAY, to: TODAY }, TODAY).label).toBe("Today");
+    const yesterday = addDays(TODAY, -1);
+    expect(buildWindow({ from: yesterday, to: yesterday }, TODAY).label).toBe("Yesterday");
+  });
+
+  it("dates any other single day rather than calling it a range", () => {
+    // "Custom range" on a one-day window is true and useless, and the label is
+    // what the CSV export is titled.
+    const window = buildWindow({ from: "2026-08-01", to: "2026-08-01" }, TODAY);
+    expect(window.label).toBe("Sat 1 Aug 2026");
+    expect(buildWindow({ from: "2026-08-01", to: "2026-08-05" }, TODAY).label).toBe(
+      "Custom range",
+    );
+  });
+
+  it("compares today against yesterday", () => {
+    // The delta on a one-day window is the only comparison that makes sense,
+    // and it is the one a manager actually wants: better or worse than
+    // yesterday.
+    const window = buildWindow({ from: TODAY, to: TODAY }, TODAY);
+    const previous = previousWindow(window);
+    expect(previous.from).toBe(addDays(TODAY, -1));
+    expect(previous.to).toBe(addDays(TODAY, -1));
+    expect(previous.days).toBe(1);
+  });
+
+  it("still clips a single future day back to today", () => {
+    const window = buildWindow({ from: "2026-12-31", to: "2026-12-31" }, TODAY);
+    expect(window.to).toBe(TODAY);
+    // from is left where it was asked for, so the range is visibly wrong
+    // rather than silently reinterpreted as something else.
+    expect(window.from).toBe("2026-12-31");
+  });
 });
 
 describe("totalsOf", () => {

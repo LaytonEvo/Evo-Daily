@@ -30,6 +30,7 @@ import {
   compareDateOnly,
   daysBetween,
   eachDateInRange,
+  formatDateOnly,
   minDateOnly,
   toDateOnly,
   toDbDate,
@@ -120,6 +121,20 @@ export type OrgReport = {
  * Build the window. The default is a rolling 30 days ending today; a custom
  * range is honoured but still clipped to today at the far end.
  */
+/**
+ * Name a window the way somebody would say it out loud.
+ *
+ * A single day reported as "Custom range" is technically true and useless —
+ * the label is what the export is titled and what the screen says you are
+ * looking at, and "Today" is the answer to the question that was asked.
+ */
+function labelFor(from: DateOnly, to: DateOnly, today: DateOnly): string {
+  if (from !== to) return "Custom range";
+  if (from === today) return "Today";
+  if (from === addDays(today, -1)) return "Yesterday";
+  return formatDateOnly(from, { withYear: true });
+}
+
 export function buildWindow(
   input: { days?: number; from?: string; to?: string } = {},
   today: DateOnly = todayInLondon(),
@@ -133,7 +148,7 @@ export function buildWindow(
       to,
       requestedTo,
       days: Math.max(1, daysBetween(from, to) + 1),
-      label: "Custom range",
+      label: labelFor(from, to, today),
     };
   }
 
@@ -607,4 +622,15 @@ export function dailyBreakdown(
 
     return { date, ...day, weekCompleted, weekMissed };
   });
+}
+
+/**
+ * How a one-day window reads on screen.
+ *
+ * "Today · Mon 21 Sep 2026" says both things worth saying. For any other single
+ * day the label already *is* the date, and printing it twice looks like a bug.
+ */
+export function singleDayLabel(window: Pick<ReportWindow, "from" | "label">): string {
+  const date = formatDateOnly(window.from, { withYear: true });
+  return window.label === date ? date : `${window.label} · ${date}`;
 }
