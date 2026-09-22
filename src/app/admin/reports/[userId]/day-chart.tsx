@@ -78,7 +78,7 @@ export function DayChart({
     return map;
   }, [rows]);
 
-  const busiest = Math.max(1, ...days.map((d) => d.completed + d.missed));
+  const busiest = Math.max(1, ...days.map((d) => d.completed + d.missed + d.open));
   const open = openDate ? (byDate.get(openDate) ?? []) : [];
   const openDay = openDate ? days.find((d) => d.date === openDate) : undefined;
 
@@ -168,6 +168,19 @@ export function DayChart({
                 onClick={onBarClick}
                 name="Missed"
                 fill="hsl(var(--destructive))"
+                isAnimationActive={false}
+                className="cursor-pointer"
+              />
+              {/* On top, and deliberately drawn at all: without it a day where
+                  nothing was done and nothing has aged out yet is an empty
+                  column, which looks exactly like a day nobody was working. */}
+              <Bar
+                dataKey="open"
+                stackId="day"
+                onClick={onBarClick}
+                name="Still open"
+                fill="hsl(var(--muted-foreground))"
+                fillOpacity={0.35}
                 radius={[3, 3, 0, 0]}
                 isAnimationActive={false}
                 className="cursor-pointer"
@@ -181,6 +194,7 @@ export function DayChart({
         <Key className="bg-success" label="On time" />
         <Key className="bg-warning" label="Late" />
         <Key className="bg-destructive" label="Missed" />
+        <Key className="bg-muted-foreground/35" label="Still open" />
         <span className="ml-auto">Tap a day to see what was on it.</span>
       </div>
 
@@ -191,6 +205,7 @@ export function DayChart({
             <p className="text-xs text-muted-foreground">
               {openDay.completed} done{openDay.late > 0 ? ` (${openDay.late} late)` : ""} ·{" "}
               {openDay.missed} missed
+              {openDay.open > 0 ? ` · ${openDay.open} still open` : ""}
             </p>
             <p className="text-xs text-muted-foreground">
               Week to this day: {openDay.weekCompleted} done, {openDay.weekMissed} missed
@@ -255,6 +270,7 @@ function DayTooltip({ active, payload }: { active?: boolean; payload?: TooltipPa
         <p className="mt-0.5">
           {day.completed} done{day.late > 0 ? `, ${day.late} late` : ""}
           {day.missed > 0 ? `, ${day.missed} missed` : ""}
+          {day.open > 0 ? `, ${day.open} still open` : ""}
         </p>
       )}
       {/* The running week is why one bad day is not an emergency. */}

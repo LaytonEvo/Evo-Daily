@@ -283,10 +283,17 @@ export function dayName(isoDay: number, long = false): string {
 }
 
 /** "Thu 28 Aug" — the format used throughout the UI. */
-export function formatDateOnly(value: DateOnly | Date, opts?: { withYear?: boolean }): string {
+export function formatDateOnly(
+  value: DateOnly | Date,
+  opts?: { withYear?: boolean; weekday?: boolean },
+): string {
   const date = toDateOnly(value);
   const [y, m, d] = date.split("-").map(Number);
-  const label = `${dayName(isoWeekday(date))} ${d} ${MONTH_NAMES[m - 1]}`;
+  // The weekday earns its place on a single date and is noise in a range: a
+  // week already runs Monday to Sunday, so "Mon 7 Sep – Sun 13 Sep" spends
+  // eight characters saying what the word "week" above it already said.
+  const day = opts?.weekday === false ? "" : `${dayName(isoWeekday(date))} `;
+  const label = `${day}${d} ${MONTH_NAMES[m - 1]}`;
   return opts?.withYear ? `${label} ${y}` : label;
 }
 

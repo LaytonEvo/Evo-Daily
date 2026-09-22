@@ -30,8 +30,10 @@ import {
   compareDateOnly,
   daysBetween,
   eachDateInRange,
+  endOfWeekLondon,
   formatDateOnly,
   minDateOnly,
+  startOfWeekLondon,
   toDateOnly,
   toDbDate,
   todayInLondon,
@@ -562,6 +564,12 @@ export type DayBreakdown = {
   date: DateOnly;
   completed: number;
   missed: number;
+  /**
+   * Still open. Drawn as its own band, because without it a day where nothing
+   * was done and nothing has aged out yet renders as an empty column —
+   * indistinguishable from a day nobody was rostered.
+   */
+  open: number;
   /** Completed, but after the deadline. A subset of `completed`. */
   late: number;
   /** Genuinely owed that day. Excused days are reported nowhere in here. */
@@ -593,23 +601,31 @@ export function dailyBreakdown(
   rows: DatedInstance[],
   window: Pick<ReportWindow, "from" | "to">,
 ): DayBreakdown[] {
-  type Tally = { completed: number; missed: number; late: number; assigned: number };
+  type Tally = {
+    completed: number;
+    missed: number;
+    open: number;
+    late: number;
+    assigned: number;
+  };
   const byDay = new Map<DateOnly, Tally>();
 
   for (const row of rows) {
     const date = toDateOnly(row.dueDate);
-    const day: Tally = byDay.get(date) ?? { completed: 0, missed: 0, late: 0, assigned: 0 };
+    const day: Tally =
+      byDay.get(date) ?? { completed: 0, missed: 0, open: 0, late: 0, assigned: 0 };
     if (row.status !== InstanceStatus.EXCUSED) day.assigned += 1;
     if (row.status === InstanceStatus.COMPLETED) {
       day.completed += 1;
       if (row.wasLate) day.late += 1;
     }
     if (row.status === InstanceStatus.MISSED) day.missed += 1;
+    if (row.status === InstanceStatus.PENDING) day.open += 1;
     byDay.set(date, day);
   }
 
   return eachDateInRange(window.from, window.to).map((date) => {
-    const day = byDay.get(date) ?? { completed: 0, missed: 0, late: 0, assigned: 0 };
+    const day = byDay.get(date) ?? { completed: 0, missed: 0, open: 0, late: 0, assigned: 0 };
 
     let weekCompleted = 0;
     let weekMissed = 0;
@@ -633,4 +649,88 @@ export function dailyBreakdown(
 export function singleDayLabel(window: Pick<ReportWindow, "from" | "label">): string {
   const date = formatDateOnly(window.from, { withYear: true });
   return window.label === date ? date : `${window.label} · ${date}`;
+}
+
+/** Open and already past its day. Not missed yet — still inside the grace window. */
+export function isOverdueRow(
+  row: { status: InstanceStatus; dueDate: DateOnly },
+  today: DateOnly,
+): boolean {
+  return row.status === InstanceStatus.PENDING && compareDateOnly(row.dueDate, today) < 0;
+}
+
+export type DayGroup<T> = {
+  date: DateOnly;
+  totals: Totals;
+  /** Open and past — the ones somebody still owes. */
+  overdue: number;
+  rows: T[];
+};
+
+export type WeekGroup<T> = {
+  /** Monday of the ISO week. Used as the key. */
+  from: DateOnly;
+  to: DateOnly;
+  label: string;
+  totals: Totals;
+  overdue: number;
+  days: DayGroup<T>[];
+};
+
+type Datedish = { dueDate: DateOnly; status: InstanceStatus; wasLate: boolean };
+
+/**
+ * Instances folded into days, and days into weeks.
+ *
+ * A ninety-day window is several hundred rows, and a flat list of them is a
+ * scrollbar rather than an answer. Rolled up, the same data opens at "which
+ * week was bad", then "which day", then the tasks — and everything you are not
+ * asking about stays one line tall.
+ *
+ * Newest first at both levels, and days nothing happened on are left out
+ * entirely: an empty row in a list is not the same kind of useful as a gap in
+ * a chart, where the space itself carries the meaning.
+ */
+export function rollUpByWeek<T extends Datedish>(rows: T[], today: DateOnly): WeekGroup<T>[] {
+  const byDay = groupBy(rows, (row) => row.dueDate);
+
+  const days: DayGroup<T>[] = [...byDay.entries()]
+    .map(([date, group]) => ({
+      date,
+      totals: totalsOf(group),
+      overdue: group.filter((row) => isOverdueRow(row, today)).length,
+      rows: group,
+    }))
+    .sort((a, b) => compareDateOnly(b.date, a.date));
+
+  const byWeek = groupBy(days, (day) => startOfWeekLondon(day.date));
+
+  return [...byWeek.entries()]
+    .map(([from, group]) => {
+      const weekRows = group.flatMap((day) => day.rows);
+      return {
+        from,
+        to: endOfWeekLondon(from),
+        label: weekLabel(from, today),
+        totals: totalsOf(weekRows),
+        overdue: group.reduce((sum, day) => sum + day.overdue, 0),
+        days: group,
+      };
+    })
+    .sort((a, b) => compareDateOnly(b.from, a.from));
+}
+
+/**
+ * "This week", "Last week", or the dates.
+ *
+ * The two most recent weeks are the ones anybody is actually looking at, and
+ * naming them saves reading two dates to work out which is which.
+ */
+function weekLabel(from: DateOnly, today: DateOnly): string {
+  const thisWeek = startOfWeekLondon(today);
+  if (from === thisWeek) return "This week";
+  if (from === addDays(thisWeek, -7)) return "Last week";
+
+  const to = endOfWeekLondon(from);
+  return `${formatDateOnly(from, { weekday: false })} – ${formatDateOnly(to, { weekday: false })}`;
 }

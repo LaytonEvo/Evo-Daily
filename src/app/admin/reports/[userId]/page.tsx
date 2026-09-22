@@ -11,7 +11,15 @@ import { ExportLink } from "../reports-screen";
 import { storageEnabled } from "@/lib/storage";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { buildPersonReport, buildWindow, dailyBreakdown, singleDayLabel } from "@/lib/reports";
+import {
+  buildPersonReport,
+  buildWindow,
+  dailyBreakdown,
+  isOverdueRow,
+  singleDayLabel,
+} from "@/lib/reports";
+import { InstanceStatus } from "@prisma/client";
+import { OutstandingList } from "./outstanding-list";
 import { formatDateOnly, todayInLondon } from "@/lib/time";
 import { cn, formatRate } from "@/lib/utils";
 
@@ -29,7 +37,9 @@ export default async function PersonReportPage({
   const query = await searchParams;
   // Tiles filter the history below. Held in the URL rather than client state so
   // it survives a refresh and can be sent to someone.
-  const filter = (["completed", "late", "missed"] as const).find((f) => f === query.filter);
+  const filter = (["completed", "late", "missed", "open"] as const).find(
+    (f) => f === query.filter,
+  );
 
   const today = todayInLondon();
   const window = buildWindow(
@@ -46,6 +56,12 @@ export default async function PersonReportPage({
 
   const queryString = `from=${window.from}&to=${window.to}`;
   const days = dailyBreakdown(report.history, window);
+
+  // Missed and still-owed together: two different states of the same failure,
+  // and separating them only helps if you already know the grace rule.
+  const outstandingRows = report.history.filter(
+    (row) => row.status === InstanceStatus.MISSED || isOverdueRow(row, today),
+  );
 
   return (
     <AppShell user={admin} active="reports">
@@ -135,11 +151,18 @@ export default async function PersonReportPage({
         {report.totals.outstanding > 0 ? (
           // Over a month this is a footnote. Over today it is most of the list,
           // and a completion rate of 15% at ten in the morning reads as a
-          // disaster rather than a morning.
+          // disaster rather than a morning. It filters, because a count you
+          // cannot open is a count you have to go and find by hand.
           <p className="-mt-2 mb-6 text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">
+            <Link
+              href={filterHref(queryString, filter === "open" ? undefined : "open")}
+              className={cn(
+                "font-medium underline decoration-dotted underline-offset-4",
+                filter === "open" ? "text-primary" : "text-foreground hover:text-primary",
+              )}
+            >
               {report.totals.outstanding} still open
-            </span>{" "}
+            </Link>{" "}
             — inside the catch-up window, so neither done nor missed. They count against the
             completion rate until they are ticked off or run out of time.
           </p>
@@ -161,32 +184,15 @@ export default async function PersonReportPage({
 
           <Card>
             <CardHeader>
-              <CardTitle>Missed tasks</CardTitle>
+              <CardTitle>Missed and overdue</CardTitle>
               <CardDescription>
-                Every missed task in this window, with the date it was due.
+                Written off, and still owed. Both, because &ldquo;nothing missed&rdquo; on a
+                recent window reads as nothing wrong when the grace period simply has not run
+                out yet.
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              {report.missed.length === 0 ? (
-                <p className="py-4 text-sm text-success">Nothing missed in this window.</p>
-              ) : (
-                <ul className="flex flex-col divide-y">
-                  {report.missed.map((item) => (
-                    <li
-                      key={item.id}
-                      className="flex flex-col gap-0.5 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
-                    >
-                      {/* Stacked on a phone: side by side, the title truncates
-                          to a couple of words and stops being identifiable. */}
-                      <span className="min-w-0 text-sm font-medium sm:truncate">{item.title}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {item.categoryName ? `${item.categoryName} · ` : ""}
-                        {formatDateOnly(item.dueDate)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+            <CardContent className="px-0 sm:px-0">
+              <OutstandingList rows={outstandingRows} today={today} />
             </CardContent>
           </Card>
 
@@ -246,6 +252,7 @@ export default async function PersonReportPage({
                 rows={report.history}
                 attachmentsEnabled={storageEnabled()}
                 filter={filter ?? "all"}
+                today={today}
               />
             </CardContent>
           </Card>

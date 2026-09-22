@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { InstanceStatus } from "@prisma/client";
 import { ChevronDown, MessageSquare } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,8 @@ import { CommentThread } from "@/app/my-day/comment-thread";
 import { NotDoneButton } from "./not-done-button";
 import { cn } from "@/lib/utils";
 import { formatDateOnly, formatTimeLondon } from "@/lib/time";
+import { rollUpByWeek } from "@/lib/reports";
+import { WeekDrill } from "./week-drill";
 
 export type HistoryRow = {
   id: string;
@@ -28,12 +30,16 @@ export type HistoryRow = {
  * row is opened — a window can be hundreds of rows and a request each would be
  * absurd.
  */
-export type HistoryFilter = "all" | "completed" | "late" | "missed";
+export type HistoryFilter = "all" | "completed" | "late" | "missed" | "open";
 
 export function matchesFilter(row: HistoryRow, filter: HistoryFilter): boolean {
   if (filter === "all") return true;
   if (filter === "missed") return row.status === InstanceStatus.MISSED;
   if (filter === "completed") return row.status === InstanceStatus.COMPLETED;
+  // Everything still owed: not done, not written off. The grace window has not
+  // closed on these, which is exactly why they are worth a filter of their own
+  // — they are the only ones anybody can still do anything about.
+  if (filter === "open") return row.status === InstanceStatus.PENDING;
   // "late" is a completed task that missed its cut-off, not a separate status.
   return row.status === InstanceStatus.COMPLETED && row.wasLate;
 }
@@ -43,14 +49,23 @@ export function HistoryTable({
   attachmentsEnabled,
   filter = "all",
   onClearFilter,
+  today,
 }: {
   rows: HistoryRow[];
   attachmentsEnabled: boolean;
   filter?: HistoryFilter;
   onClearFilter?: () => void;
+  /** Supplied so "overdue" is decided in London, not in the reader's browser. */
+  today?: string;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const shown = rows.filter((r) => matchesFilter(r, filter));
+
+  const weeks = useMemo(
+    () => (today ? rollUpByWeek(shown, today) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [shown.map((r) => r.id).join(","), today],
+  );
 
   if (shown.length === 0) {
     return (
@@ -65,6 +80,40 @@ export function HistoryTable({
     );
   }
 
+  if (today) {
+    return (
+      <WeekDrill
+        weeks={weeks}
+        emptyLabel="Nothing in this window."
+        renderRows={(dayRows) => (
+          <Rows
+            rows={dayRows}
+            open={open}
+            setOpen={setOpen}
+            attachmentsEnabled={attachmentsEnabled}
+          />
+        )}
+      />
+    );
+  }
+
+  return (
+    <Rows rows={shown} open={open} setOpen={setOpen} attachmentsEnabled={attachmentsEnabled} />
+  );
+}
+
+/** The rows themselves — a card list on a phone, a table above it. */
+function Rows({
+  rows: shown,
+  open,
+  setOpen,
+  attachmentsEnabled,
+}: {
+  rows: HistoryRow[];
+  open: string | null;
+  setOpen: (id: string | null) => void;
+  attachmentsEnabled: boolean;
+}) {
   return (
     <>
       {/* A phone cannot hold five columns without breaking titles onto one
