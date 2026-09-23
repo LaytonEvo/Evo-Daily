@@ -41,6 +41,27 @@ describeDb("recording activity", () => {
     expect(days[0].visits).toBe(1);
   });
 
+  /**
+   * The thing that looked wrong on the live screen: four people all showing
+   * the same minute, as though one person opening the app had been credited to
+   * the whole team. It was not that — but nothing here proved it wasn't, and
+   * an accountability number nobody trusts is worth nothing.
+   */
+  it("credits the person who opened it and nobody else", async () => {
+    const admin = await prisma.user.findUniqueOrThrow({
+      where: { id: fixture.adminId },
+      select: { id: true, lastActiveAt: true },
+    });
+
+    await recordActivity(prisma, await user(), at(TODAY));
+
+    const untouched = await prisma.user.findUniqueOrThrow({ where: { id: admin.id } });
+    expect(untouched.lastActiveAt).toBeNull();
+
+    const rows = await prisma.dailyActivity.findMany({ select: { userId: true } });
+    expect(rows.map((r) => r.userId)).toEqual([fixture.memberId]);
+  });
+
   it("does not write again within the throttle", async () => {
     await recordActivity(prisma, await user(), at(TODAY, "09:00"));
     const soon = new Date(at(TODAY, "09:00").getTime() + ACTIVITY_THROTTLE_MS - 1000);

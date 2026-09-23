@@ -58,6 +58,7 @@ export function ActivityLog({
           {rows.map((row) => {
             const visited = new Map(row.days.map((d) => [d.day, d.visits]));
             const activeDays = row.days.length;
+            const todayVisits = visited.get(today) ?? 0;
 
             return (
               <li
@@ -69,8 +70,14 @@ export function ActivityLog({
               >
                 <div className="min-w-0 sm:w-44 sm:shrink-0">
                   <p className="truncate text-sm font-medium">{row.name}</p>
+                  {/* The visit count is here because the last-active time alone
+                      could not answer the obvious suspicion about this card: a
+                      whole team showing the same minute looks like one person's
+                      visit credited to everybody. Counts that move apart say
+                      plainly that they do not. */}
                   <p className="text-xs text-muted-foreground">
                     {lastActiveLabel(row.lastActiveAt, today)}
+                    {todayVisits > 0 ? ` · ${todayVisits} visit${todayVisits === 1 ? "" : "s"}` : ""}
                   </p>
                 </div>
 
