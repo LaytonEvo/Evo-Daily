@@ -43,6 +43,14 @@ export type SessionUser = {
  * all query the database anyway.
  */
 export async function currentUser(): Promise<SessionUser | null> {
+  const record = await loadUser();
+  return record && toSessionUser(record);
+}
+
+type UserRecord = SessionUser & { lastActiveAt: Date | null };
+
+/** The signed-in user's row, or null if the token no longer names a live one. */
+async function loadUser(): Promise<UserRecord | null> {
   const session = await auth();
   if (!session?.user?.id) return null;
 
@@ -62,15 +70,10 @@ export async function currentUser(): Promise<SessionUser | null> {
 
   // Deleted or deactivated since the token was issued: treat as signed out.
   if (!record || !record.isActive) return null;
+  return record;
+}
 
-  // Noted here because this runs on every guarded page and API call, which is
-  // the only honest definition of "using it". Throttled to once every couple
-  // of minutes, so the usual case adds no query at all — lastActiveAt is
-  // already in the row above. Awaited rather than fired and forgotten: work
-  // started after a server component returns is not guaranteed to finish, and
-  // a statistic that records itself only sometimes is worse than none.
-  await recordActivity(prisma, record);
-
+function toSessionUser(record: UserRecord): SessionUser {
   return {
     id: record.id,
     name: record.name,
@@ -83,9 +86,20 @@ export async function currentUser(): Promise<SessionUser | null> {
 
 /** For pages: send anonymous visitors to the login screen. */
 export async function requireUser(): Promise<SessionUser> {
-  const user = await currentUser();
-  if (!user) redirect("/login");
-  return user;
+  const record = await loadUser();
+  if (!record) redirect("/login");
+
+  // Activity is recorded here and nowhere else, because a page is the only
+  // request a person makes on purpose. It used to be recorded for every
+  // guarded request, which quietly meant the API calls too — and the nav
+  // badge polls /api/me/unread once a minute for as long as a tab is open.
+  // A tab left open on a back office screen therefore counted a visit every
+  // couple of minutes all afternoon: four people showed 45-48 visits each on
+  // the first day, which is tab uptime wearing the clothes of engagement.
+  // Throttled on top of this, so a burst of navigation is still one visit.
+  await recordActivity(prisma, record);
+
+  return toSessionUser(record);
 }
 
 /** For pages: a MEMBER reaching an /admin route lands back on their own day. */

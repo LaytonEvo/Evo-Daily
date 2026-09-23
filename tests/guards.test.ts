@@ -8,7 +8,7 @@ const session = vi.hoisted(() => ({ value: null as unknown }));
 vi.mock("@/lib/auth", () => ({ auth: async () => session.value }));
 vi.mock("@/lib/db", async () => ({ prisma: (await import("./helpers/db")).prisma }));
 
-const { currentUser } = await import("@/lib/guards");
+const { currentUser, requireUser, requireApiUser } = await import("@/lib/guards");
 
 const available = await databaseAvailable();
 const describeDb = available ? describe : describe.skip;
@@ -96,5 +96,59 @@ describeDb("currentUser", () => {
     expect(user?.organisationId).toBe(orgId);
     expect(user?.name).toBe("Layton Brooks");
     expect(user?.email).toBe("layton@example.com");
+  });
+});
+
+/**
+ * Which requests count as somebody using it.
+ *
+ * The first version recorded activity for every guarded request, which read as
+ * obviously right and was not: the nav badge polls /api/me/unread once a
+ * minute for as long as a tab is open, so a tab nobody was looking at scored a
+ * visit every couple of minutes. On the first day live, four people showed
+ * 45-48 visits each — near enough the same number for everybody, because it
+ * was measuring how long their tabs had been open and nothing else.
+ */
+describeDb("what counts as activity", () => {
+  let userId: string;
+
+  beforeEach(async () => {
+    await resetDatabase();
+    const org = await prisma.organisation.create({
+      data: { name: "Evolution Golf", timezone: "Europe/London" },
+    });
+    const user = await prisma.user.create({
+      data: {
+        organisationId: org.id,
+        name: "Layton Brooks",
+        email: "layton@example.com",
+        passwordHash: "irrelevant",
+        role: Role.MEMBER,
+        isActive: true,
+        mustChangePassword: false,
+      },
+    });
+    userId = user.id;
+    signedInAs(userId);
+  });
+
+  const visits = () =>
+    prisma.dailyActivity.findMany({ where: { userId }, select: { visits: true } });
+
+  it("counts a page load", async () => {
+    await requireUser();
+    expect(await visits()).toEqual([{ visits: 1 }]);
+  });
+
+  it("does not count a background poll of an API route", async () => {
+    await requireApiUser();
+    expect(await visits()).toEqual([]);
+    const after = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    expect(after.lastActiveAt).toBeNull();
+  });
+
+  it("does not count reading the current user on its own", async () => {
+    await currentUser();
+    expect(await visits()).toEqual([]);
   });
 });
