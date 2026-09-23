@@ -246,3 +246,128 @@ describeDb("an admin looking at somebody's messages", () => {
     expect(await threadsForMember(prisma, admin(), "no-such-user")).toBeNull();
   });
 });
+
+describeDb("the everyone view", () => {
+  let fixture: Fixture;
+  let alexsTask: string;
+
+  const brad = () => ({ id: fixture.memberId, organisationId: fixture.orgId, role: Role.MEMBER });
+  const luke = () => ({ id: fixture.adminId, organisationId: fixture.orgId, role: Role.ADMIN });
+
+  beforeEach(async () => {
+    fixture = await seedFixture({ graceDays: 1 });
+    const template = await createTemplate(fixture, {
+      title: "Pick and pack web orders",
+      startDate: TODAY,
+      assigneeId: fixture.otherMemberId,
+      daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+    });
+    await generateInstances(prisma, TODAY, TODAY);
+    alexsTask = (await instancesFor(template.id))[0].id;
+    // A conversation between two other people entirely.
+    await prisma.comment.create({
+      data: {
+        organisationId: fixture.orgId,
+        instanceId: alexsTask,
+        authorId: fixture.otherMemberId,
+        body: "Courier never turned up.",
+      },
+    });
+  });
+
+  it("shows an admin a conversation they are not in", async () => {
+    // The whole complaint: one admin wrote the comments, so the other admin's
+    // inbox was empty and there was no route to the team's conversations.
+    expect(await threadsFor(prisma, luke(), "mine")).toEqual([]);
+
+    const all = await threadsFor(prisma, luke(), "all");
+    expect(all.map((t) => t.instanceId)).toEqual([alexsTask]);
+    expect(all[0].inThread).toBe(false);
+  });
+
+  it("does not count somebody else's conversation as unread", async () => {
+    const all = await threadsFor(prisma, luke(), "all");
+    // Reading over a thread is not being behind on it. A badge that is never
+    // zero is a badge nobody reads.
+    expect(all[0].unread).toBe(0);
+    expect(await unreadCountFor(prisma, luke())).toBe(0);
+  });
+
+  it("still counts a thread the admin is actually in", async () => {
+    await prisma.comment.create({
+      data: {
+        organisationId: fixture.orgId,
+        instanceId: alexsTask,
+        authorId: fixture.adminId,
+        body: "Which courier?",
+      },
+    });
+    await prisma.comment.create({
+      data: {
+        organisationId: fixture.orgId,
+        instanceId: alexsTask,
+        authorId: fixture.otherMemberId,
+        body: "The usual one.",
+      },
+    });
+
+    const all = await threadsFor(prisma, luke(), "all");
+    expect(all[0].inThread).toBe(true);
+    // Both of the other person's, since the admin has never opened it.
+    expect(all[0].unread).toBe(2);
+    expect(await unreadCountFor(prisma, luke())).toBe(2);
+  });
+
+  it("gives a member their own threads whatever scope they ask for", async () => {
+    // Not an error: the option is never offered to them, so there is nothing
+    // to refuse. Asking for it by hand simply gets them their own.
+    expect(await threadsFor(prisma, brad(), "all")).toEqual([]);
+  });
+
+  it("does not cross organisations", async () => {
+    const elsewhere = await prisma.organisation.create({
+      data: { name: "Somebody Else Ltd", timezone: "Europe/London" },
+    });
+    const stranger = await prisma.user.create({
+      data: {
+        organisationId: elsewhere.id,
+        email: "stranger@elsewhere.local",
+        name: "Stranger",
+        passwordHash: "x",
+        mustChangePassword: false,
+      },
+    });
+    const theirTemplate = await prisma.taskTemplate.create({
+      data: {
+        organisationId: elsewhere.id,
+        title: "Not yours",
+        frequency: "DAILY",
+        daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+        startDate: new Date(TODAY),
+        assigneeId: stranger.id,
+        createdById: stranger.id,
+      },
+    });
+    const theirs = await prisma.taskInstance.create({
+      data: {
+        organisationId: elsewhere.id,
+        templateId: theirTemplate.id,
+        assigneeId: stranger.id,
+        title: "Not yours",
+        dueDate: new Date(TODAY),
+        dueAt: new Date(`${TODAY}T23:59:00Z`),
+      },
+    });
+    await prisma.comment.create({
+      data: {
+        organisationId: elsewhere.id,
+        instanceId: theirs.id,
+        authorId: stranger.id,
+        body: "Private.",
+      },
+    });
+
+    const all = await threadsFor(prisma, luke(), "all");
+    expect(all.map((t) => t.instanceId)).not.toContain(theirs.id);
+  });
+});

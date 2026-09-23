@@ -35,6 +35,8 @@ export type ThreadComment = {
   attachments: number;
 };
 
+export type ThreadScope = "mine" | "all";
+
 export type Thread = {
   instanceId: string;
   title: string;
@@ -42,6 +44,12 @@ export type Thread = {
   assigneeName: string;
   /** Mine to do, as opposed to one I am only talking on. */
   assignedToMe: boolean;
+  /**
+   * I own the task or have written on it. False only in the everyone view:
+   * an admin reading a conversation between two other people is not behind on
+   * it, so it carries no unread count.
+   */
+  inThread: boolean;
   comments: ThreadComment[];
   /** By somebody else, since I last opened it. */
   unread: number;
@@ -57,10 +65,23 @@ type Viewer = { id: string; organisationId: string; role: Role };
  * conversation became unreachable the moment its task aged off the day screen,
  * and a window is how that happens.
  */
-export async function threadsFor(db: PrismaClient, viewer: Viewer): Promise<Thread[]> {
+export async function threadsFor(
+  db: PrismaClient,
+  viewer: Viewer,
+  scope: ThreadScope = "mine",
+): Promise<Thread[]> {
+  const ownership = {
+    OR: [{ assigneeId: viewer.id }, { comments: { some: { authorId: viewer.id } } }],
+  };
+
+  // "Everyone" is every conversation in the organisation, and admins only.
+  // A member asking for it gets their own, rather than an error: there is
+  // nothing to tell them they cannot have, because the option is not offered
+  // to them in the first place.
+  const everyone = scope === "all" && viewer.role === Role.ADMIN;
   const mine = {
     organisationId: viewer.organisationId,
-    OR: [{ assigneeId: viewer.id }, { comments: { some: { authorId: viewer.id } } }],
+    ...(everyone ? {} : ownership),
   };
 
   // Which threads are the most recent is a question about the comments, not
@@ -102,6 +123,9 @@ export async function threadsFor(db: PrismaClient, viewer: Viewer): Promise<Thre
 
   const threads = instances.map((instance) => {
     const readAt = instance.reads[0]?.readAt ?? null;
+    const inThread =
+      instance.assigneeId === viewer.id ||
+      instance.comments.some((c) => c.authorId === viewer.id);
     const comments: ThreadComment[] = instance.comments.map((c) => ({
       id: c.id,
       body: c.body,
@@ -118,11 +142,13 @@ export async function threadsFor(db: PrismaClient, viewer: Viewer): Promise<Thre
       dueDate: toDateOnly(instance.dueDate),
       assigneeName: instance.assignee.name,
       assignedToMe: instance.assigneeId === viewer.id,
+      inThread,
       comments,
       // Your own words are never news, whichever screen you wrote them on.
-      unread: comments.filter(
-        (c) => !c.mine && (readAt === null || c.createdAt > readAt),
-      ).length,
+      // Neither is a conversation you are only reading over.
+      unread: inThread
+        ? comments.filter((c) => !c.mine && (readAt === null || c.createdAt > readAt)).length
+        : 0,
       lastAt: comments[comments.length - 1]?.createdAt ?? instance.dueDate,
     };
   });
@@ -132,9 +158,15 @@ export async function threadsFor(db: PrismaClient, viewer: Viewer): Promise<Thre
   return threads.sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime());
 }
 
-/** What the badge says. */
+/**
+ * What the badge says.
+ *
+ * Always the threads you are in, never the everyone view. A badge that counts
+ * other people's conversations is one that is never zero, and a number that is
+ * never zero stops being read.
+ */
 export async function unreadCountFor(db: PrismaClient, viewer: Viewer): Promise<number> {
-  const threads = await threadsFor(db, viewer);
+  const threads = await threadsFor(db, viewer, "mine");
   return threads.reduce((sum, thread) => sum + thread.unread, 0);
 }
 

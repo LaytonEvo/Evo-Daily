@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronDown, MessageSquare } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,7 @@ export type ThreadRow = {
   dueDate: string;
   assigneeName: string;
   assignedToMe: boolean;
+  inThread: boolean;
   comments: Comment[];
   unread: number;
   lastAt: string;
@@ -42,6 +44,7 @@ export function MessagesScreen({
   attachmentsEnabled,
   readOnly = false,
   unreadBy,
+  scope,
 }: {
   threads: ThreadRow[];
   attachmentsEnabled: boolean;
@@ -54,6 +57,12 @@ export function MessagesScreen({
   readOnly?: boolean;
   /** Whose unread this is, when it is not the reader's own. */
   unreadBy?: string;
+  /**
+   * Present for admins, who can read the whole team's conversations as well as
+   * their own. Absent for everybody else, and for the view-as screen, which is
+   * one person's inbox by definition.
+   */
+  scope?: "mine" | "all";
 }) {
   const router = useRouter();
   const [open, setOpen] = useState<string | null>(() =>
@@ -88,9 +97,22 @@ export function MessagesScreen({
     setOpen(open === thread.instanceId ? null : thread.instanceId);
   }
 
+  const tabs = scope ? (
+    <div className="mb-4 flex flex-wrap items-center gap-2">
+      <ScopeTab href="/messages" active={scope === "mine"} label="Mine" />
+      <ScopeTab href="/messages?scope=all" active={scope === "all"} label="Everyone" />
+      {scope === "all" ? (
+        <span className="text-xs text-muted-foreground">
+          Every conversation in the team. Only the ones you are in are counted as unread.
+        </span>
+      ) : null}
+    </div>
+  ) : null;
+
   if (threads.length === 0) {
     return (
       <main className="mx-auto w-full max-w-2xl pb-16 pt-2">
+        {tabs}
         <div className="rounded-lg border border-dashed bg-card/50 px-4 py-12 text-center">
           <MessageSquare className="mx-auto h-6 w-6 text-muted-foreground" />
           <p className="mt-2 text-sm font-medium">No messages yet.</p>
@@ -106,10 +128,13 @@ export function MessagesScreen({
 
   return (
     <main className="mx-auto w-full max-w-2xl pb-16 pt-2 safe-bottom">
+      {tabs}
       <p className="mb-4 text-sm text-muted-foreground">
         {readOnly
           ? `Every conversation on ${unreadBy ? `${unreadBy}'s` : "their"} tasks, as they see it. Reply from the task itself or from your own Messages — a comment written here would be from you, not them, and this screen is for reading.`
-          : "Every task you own or have written on. Replies land here whatever day the task was for."}
+          : scope === "all"
+            ? "Every task in the team that anybody has written on."
+            : "Every task you own or have written on. Replies land here whatever day the task was for."}
       </p>
 
       <div className="flex flex-col gap-2">
@@ -193,5 +218,22 @@ export function MessagesScreen({
         })}
       </div>
     </main>
+  );
+}
+
+function ScopeTab({ href, active, label }: { href: string; active: boolean; label: string }) {
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
+        active
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-input bg-card hover:bg-accent",
+      )}
+    >
+      {label}
+    </Link>
   );
 }
