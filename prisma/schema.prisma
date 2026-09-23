@@ -60,6 +60,13 @@ model User {
   bookedAbsences     Absence[]      @relation("AbsenceCreator")
   signIns            SignIn[]
   commentReads       CommentRead[]
+  activity           DailyActivity[]
+  /**
+   * The last time they loaded a page, not the last time they signed in. The
+   * session cookie lasts a month, so a sign-in says when somebody first typed
+   * a password and nothing at all about whether they have opened it since.
+   */
+  lastActiveAt       DateTime?
 
   @@index([organisationId, isActive])
 }
@@ -233,6 +240,27 @@ model CommentRead {
 
   @@id([userId, instanceId])
   @@index([userId])
+}
+
+/**
+ * One row per person per day they used it.
+ *
+ * Rolled up rather than a row per page load: the question is "are they opening
+ * this", which a day answers and a hundred rows of page views answers worse
+ * and forever. `visits` counts active spells rather than requests — it is
+ * written at most once every couple of minutes, so a tab left open all
+ * afternoon does not read as heavy use.
+ */
+model DailyActivity {
+  userId String
+  day    DateTime @db.Date
+  visits Int      @default(1)
+  lastAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, day])
+  @@index([day])
 }
 
 model Comment {

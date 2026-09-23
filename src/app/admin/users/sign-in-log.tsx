@@ -17,10 +17,11 @@ export function SignInLog({ rows, today }: { rows: SignInRow[]; today: string })
   return (
     <Card className="mt-6">
       <CardHeader>
-        <CardTitle>Sign-ins</CardTitle>
+        <CardTitle>Sign-in attempts</CardTitle>
         <CardDescription>
-          The last {rows.length === 0 ? "few" : rows.length} attempts, newest first. A completion
-          rate cannot tell you whether somebody opened the app at all.
+          The last {rows.length === 0 ? "few" : rows.length} password attempts, newest first.
+          This is about accounts, not usage: a session lasts a month, so somebody using it every
+          day appears here once. Who is opening it is the card above.
         </CardDescription>
       </CardHeader>
 

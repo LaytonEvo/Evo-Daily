@@ -40,6 +40,7 @@ export function UsersScreen({
   users,
   categories,
   absences,
+  activityLog,
   settings,
   signInLog,
   today,
@@ -48,6 +49,7 @@ export function UsersScreen({
   users: Person[];
   categories: Category[];
   absences: AbsenceRow[];
+  activityLog?: React.ReactNode;
   settings?: React.ReactNode;
   signInLog?: React.ReactNode;
   today: DateOnly;
@@ -96,7 +98,9 @@ export function UsersScreen({
                 <th className="hidden px-2 py-2.5 sm:px-3 font-medium md:table-cell">Email</th>
                 <th className="px-2 py-2.5 sm:px-3 font-medium">Role</th>
                 <th className="hidden px-2 py-2.5 sm:px-3 text-right font-medium sm:table-cell">Active tasks</th>
-                <th className="hidden px-2 py-2.5 font-medium lg:table-cell sm:px-3">Last seen</th>
+                <th className="hidden px-2 py-2.5 font-medium lg:table-cell sm:px-3">
+                  Last active
+                </th>
                 <th className="hidden px-2 py-2.5 font-medium sm:table-cell sm:px-3">Status</th>
                 <th className="w-20 px-2 py-2.5 sm:w-28 sm:px-3" />
               </tr>
@@ -126,7 +130,7 @@ export function UsersScreen({
                         ever opened. */}
                     {person.lastSeen === null ? (
                       <Badge variant="muted" className="mt-1 sm:ml-2 sm:mt-0">
-                        never signed in
+                        never opened it
                       </Badge>
                     ) : null}
                     {person.mustChangePassword ? (
@@ -186,6 +190,8 @@ export function UsersScreen({
         absences={absences}
         people={users.map((u) => ({ id: u.id, name: u.name, isActive: u.isActive }))}
       />
+
+      {activityLog}
 
       {settings}
 

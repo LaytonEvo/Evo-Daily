@@ -11,6 +11,7 @@ import { redirect } from "next/navigation";
 import { auth } from "./auth";
 import { prisma } from "./db";
 import { ApiError } from "./errors";
+import { recordActivity } from "./activity";
 import type { Actor } from "./instances";
 
 export { ApiError };
@@ -55,11 +56,20 @@ export async function currentUser(): Promise<SessionUser | null> {
       organisationId: true,
       mustChangePassword: true,
       isActive: true,
+      lastActiveAt: true,
     },
   });
 
   // Deleted or deactivated since the token was issued: treat as signed out.
   if (!record || !record.isActive) return null;
+
+  // Noted here because this runs on every guarded page and API call, which is
+  // the only honest definition of "using it". Throttled to once every couple
+  // of minutes, so the usual case adds no query at all — lastActiveAt is
+  // already in the row above. Awaited rather than fired and forgotten: work
+  // started after a server component returns is not guaranteed to finish, and
+  // a statistic that records itself only sometimes is worse than none.
+  await recordActivity(prisma, record);
 
   return {
     id: record.id,

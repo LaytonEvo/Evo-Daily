@@ -2,10 +2,12 @@ import { prisma } from "@/lib/db";
 import { requireAdminPage } from "@/lib/guards";
 import { AppShell } from "@/components/app-shell";
 import { listAbsences } from "@/lib/absences";
-import { lastSeenByUser, recentSignIns } from "@/lib/sign-ins";
+import { recentSignIns } from "@/lib/sign-ins";
+import { recentActivity } from "@/lib/activity";
 import { toDateOnly, todayInLondon } from "@/lib/time";
 import { UsersScreen } from "./users-screen";
 import { SignInLog } from "./sign-in-log";
+import { ActivityLog } from "./activity-log";
 import { SettingsEditor } from "./settings-editor";
 import { getSettings } from "@/lib/settings";
 import { leadDaysFor } from "@/lib/lead-time";
@@ -13,11 +15,14 @@ import { leadDaysFor } from "@/lib/lead-time";
 export const metadata = { title: "People · EvoTasks" };
 export const dynamic = "force-dynamic";
 
+/** Two weeks is long enough to see a habit and short enough to fit a row. */
+const ACTIVITY_DAYS = 14;
+
 export default async function UsersPage() {
   const admin = await requireAdminPage();
   const today = todayInLondon();
 
-  const [users, categories, absences, signIns, lastSeen, settings, noticeSources] =
+  const [users, categories, absences, signIns, activity, settings, noticeSources] =
     await Promise.all([
     prisma.user.findMany({
       where: { organisationId: admin.organisationId },
@@ -43,7 +48,7 @@ export default async function UsersPage() {
     }),
     listAbsences(prisma, admin.organisationId),
     recentSignIns(prisma, admin.organisationId),
-    lastSeenByUser(prisma, admin.organisationId),
+    recentActivity(prisma, admin.organisationId, ACTIVITY_DAYS, today),
     getSettings(prisma, admin.organisationId),
     prisma.taskTemplate.findMany({
       where: { organisationId: admin.organisationId, isActive: true },
@@ -71,7 +76,9 @@ export default async function UsersPage() {
           managerId: u.managerId,
           mustChangePassword: u.mustChangePassword,
           activeTasks: u._count.assignedTemplates,
-          lastSeen: lastSeen.get(u.id)?.toISOString() ?? null,
+          // The real thing now: when they last opened a page, not when they
+          // last typed a password.
+          lastSeen: activity.get(u.id)?.lastActiveAt?.toISOString() ?? null,
         }))}
         categories={categories.map((c) => ({
           id: c.id,
@@ -97,6 +104,19 @@ export default async function UsersPage() {
         // A server component handed through as a slot: the screen around it is
         // a client component, and lib/sign-ins reaches for Prisma.
         today={today}
+        activityLog={
+          <ActivityLog
+            today={today}
+            days={ACTIVITY_DAYS}
+            rows={users.map((u) => ({
+              id: u.id,
+              name: u.name,
+              isActive: u.isActive,
+              lastActiveAt: activity.get(u.id)?.lastActiveAt?.toISOString() ?? null,
+              days: activity.get(u.id)?.days ?? [],
+            }))}
+          />
+        }
         settings={
           <SettingsEditor
             graceDays={settings.graceDays}
