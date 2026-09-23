@@ -89,113 +89,118 @@ export function UsersScreen({
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="px-2 py-2.5 sm:px-3 font-medium">Name</th>
-                <th className="hidden px-2 py-2.5 sm:px-3 font-medium md:table-cell">Email</th>
-                <th className="px-2 py-2.5 sm:px-3 font-medium">Role</th>
-                <th className="hidden px-2 py-2.5 sm:px-3 text-right font-medium sm:table-cell">Active tasks</th>
-                <th className="hidden px-2 py-2.5 font-medium lg:table-cell sm:px-3">
-                  Last active
-                </th>
-                <th className="hidden px-2 py-2.5 font-medium sm:table-cell sm:px-3">Status</th>
-                <th className="w-20 px-2 py-2.5 sm:w-28 sm:px-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((person) => (
-                <tr
-                  key={person.id}
-                  className={cn("border-b last:border-0", !person.isActive && "opacity-60")}
-                >
-                  <td className="max-w-[42vw] px-2 py-2.5 sm:max-w-none sm:px-3">
-                    <Link
-                      href={`/admin/reports/${person.id}`}
-                      className="-my-1.5 block max-w-[46vw] truncate py-1.5 font-medium hover:underline sm:max-w-none"
-                    >
-                      {person.name}
-                    </Link>
-                    <span className="block max-w-[46vw] truncate text-xs font-normal text-muted-foreground md:hidden">
-                      {person.email}
-                    </span>
-                    {!person.isActive ? (
-                      <Badge variant="muted" className="mt-1 sm:hidden">
-                        Deactivated
-                      </Badge>
-                    ) : null}
-                    {/* The one that matters at any width: an account nobody has
-                        ever opened. */}
-                    {person.lastSeen === null ? (
-                      <Badge variant="muted" className="mt-1 sm:ml-2 sm:mt-0">
-                        never opened it
-                      </Badge>
-                    ) : null}
-                    {person.mustChangePassword ? (
-                      <Badge variant="muted" className="mt-1 sm:ml-2 sm:mt-0">
-                        <span className="sm:hidden">no password</span>
-                        <span className="hidden sm:inline">password not set</span>
-                      </Badge>
-                    ) : null}
-                  </td>
-                  <td className="hidden px-2 py-2.5 sm:px-3 text-muted-foreground md:table-cell">{person.email}</td>
-                  <td className="px-2 py-2.5 sm:px-3">
-                    <Badge variant={person.role === Role.ADMIN ? "default" : "muted"}>
-                      {person.role === Role.ADMIN ? "Admin" : "Member"}
-                    </Badge>
-                  </td>
-                  <td className="hidden px-2 py-2.5 sm:px-3 text-right tabular-nums sm:table-cell">
-                    {person.activeTasks}
-                  </td>
-                  <td className="hidden whitespace-nowrap px-2 py-2.5 text-muted-foreground lg:table-cell sm:px-3">
-                    {lastSeenLabel(person.lastSeen, today)}
-                  </td>
-                  <td className="hidden px-2 py-2.5 sm:table-cell sm:px-3">
-                    {person.isActive ? (
-                      <Badge variant="success">Active</Badge>
-                    ) : (
-                      <Badge variant="muted">Deactivated</Badge>
-                    )}
-                  </td>
-                  <td className="px-2 py-2.5 sm:px-3 text-right">
-                    <div className="flex items-center justify-end">
-                      {/* Icon only: this column already sets the table's
-                          minimum width, and a second word in it pushes the
-                          whole thing sideways on a phone. */}
-                      <Link
-                        href={`/admin/users/${person.id}/day`}
-                        aria-label={`View ${person.name}'s day`}
-                        title="View their day"
-                        className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Link>
-                      <Button variant="ghost" size="sm" onClick={() => setEditing(person)}>
-                        Edit
-                      </Button>
-                    </div>
-                  </td>
+      {/* One stack, one gap. Each card used to carry its own mt-6, so a card
+          added in the wrong place sat flush against the one above it and the
+          soft shadow bled over its top edge. The gap belongs to the stack. */}
+      <div className="flex flex-col gap-6">
+        <div className="overflow-hidden rounded-lg border bg-card">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="px-2 py-2.5 sm:px-3 font-medium">Name</th>
+                  <th className="hidden px-2 py-2.5 sm:px-3 font-medium md:table-cell">Email</th>
+                  <th className="px-2 py-2.5 sm:px-3 font-medium">Role</th>
+                  <th className="hidden px-2 py-2.5 sm:px-3 text-right font-medium sm:table-cell">Active tasks</th>
+                  <th className="hidden px-2 py-2.5 font-medium lg:table-cell sm:px-3">
+                    Last active
+                  </th>
+                  <th className="hidden px-2 py-2.5 font-medium sm:table-cell sm:px-3">Status</th>
+                  <th className="w-20 px-2 py-2.5 sm:w-28 sm:px-3" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {users.map((person) => (
+                  <tr
+                    key={person.id}
+                    className={cn("border-b last:border-0", !person.isActive && "opacity-60")}
+                  >
+                    <td className="max-w-[42vw] px-2 py-2.5 sm:max-w-none sm:px-3">
+                      <Link
+                        href={`/admin/reports/${person.id}`}
+                        className="-my-1.5 block max-w-[46vw] truncate py-1.5 font-medium hover:underline sm:max-w-none"
+                      >
+                        {person.name}
+                      </Link>
+                      <span className="block max-w-[46vw] truncate text-xs font-normal text-muted-foreground md:hidden">
+                        {person.email}
+                      </span>
+                      {!person.isActive ? (
+                        <Badge variant="muted" className="mt-1 sm:hidden">
+                          Deactivated
+                        </Badge>
+                      ) : null}
+                      {/* The one that matters at any width: an account nobody has
+                          ever opened. */}
+                      {person.lastSeen === null ? (
+                        <Badge variant="muted" className="mt-1 sm:ml-2 sm:mt-0">
+                          never opened it
+                        </Badge>
+                      ) : null}
+                      {person.mustChangePassword ? (
+                        <Badge variant="muted" className="mt-1 sm:ml-2 sm:mt-0">
+                          <span className="sm:hidden">no password</span>
+                          <span className="hidden sm:inline">password not set</span>
+                        </Badge>
+                      ) : null}
+                    </td>
+                    <td className="hidden px-2 py-2.5 sm:px-3 text-muted-foreground md:table-cell">{person.email}</td>
+                    <td className="px-2 py-2.5 sm:px-3">
+                      <Badge variant={person.role === Role.ADMIN ? "default" : "muted"}>
+                        {person.role === Role.ADMIN ? "Admin" : "Member"}
+                      </Badge>
+                    </td>
+                    <td className="hidden px-2 py-2.5 sm:px-3 text-right tabular-nums sm:table-cell">
+                      {person.activeTasks}
+                    </td>
+                    <td className="hidden whitespace-nowrap px-2 py-2.5 text-muted-foreground lg:table-cell sm:px-3">
+                      {lastSeenLabel(person.lastSeen, today)}
+                    </td>
+                    <td className="hidden px-2 py-2.5 sm:table-cell sm:px-3">
+                      {person.isActive ? (
+                        <Badge variant="success">Active</Badge>
+                      ) : (
+                        <Badge variant="muted">Deactivated</Badge>
+                      )}
+                    </td>
+                    <td className="px-2 py-2.5 sm:px-3 text-right">
+                      <div className="flex items-center justify-end">
+                        {/* Icon only: this column already sets the table's
+                            minimum width, and a second word in it pushes the
+                            whole thing sideways on a phone. */}
+                        <Link
+                          href={`/admin/users/${person.id}/day`}
+                          aria-label={`View ${person.name}'s day`}
+                          title="View their day"
+                          className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Link>
+                        <Button variant="ghost" size="sm" onClick={() => setEditing(person)}>
+                          Edit
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
+
+        <CategoryEditor categories={categories} />
+
+        <AbsenceEditor
+          absences={absences}
+          people={users.map((u) => ({ id: u.id, name: u.name, isActive: u.isActive }))}
+        />
+
+        {activityLog}
+
+        {settings}
+
+        {signInLog}
       </div>
-
-      <CategoryEditor categories={categories} />
-
-      <AbsenceEditor
-        absences={absences}
-        people={users.map((u) => ({ id: u.id, name: u.name, isActive: u.isActive }))}
-      />
-
-      {activityLog}
-
-      {settings}
-
-      {signInLog}
 
       {creating || editing ? (
         <PersonDrawer

@@ -73,7 +73,7 @@ export function CategoryEditor({ categories }: { categories: Category[] }) {
   }
 
   return (
-    <Card className="mt-6">
+    <Card>
       <CardHeader className="flex-row items-start justify-between gap-3">
         <div>
           <CardTitle>Categories</CardTitle>

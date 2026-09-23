@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
  */
 export function SignInLog({ rows, today }: { rows: SignInRow[]; today: string }) {
   return (
-    <Card className="mt-6">
+    <Card>
       <CardHeader>
         <CardTitle>Sign-in attempts</CardTitle>
         <CardDescription>
