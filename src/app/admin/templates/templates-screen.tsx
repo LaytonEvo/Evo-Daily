@@ -29,6 +29,7 @@ export type TemplateRow = {
   endDate: string | null;
   isActive: boolean;
   isStarred: boolean;
+  leadDays: number | null;
   scheduleLabel: string;
   completionRate: number | null;
   assignedLast30: number;

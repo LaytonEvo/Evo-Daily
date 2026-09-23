@@ -8,6 +8,7 @@ import { Input, Select, Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import type { Category, Person, TemplateRow } from "./templates-screen";
+import { DEFAULT_LEAD_DAYS, describeLead } from "@/lib/lead-time";
 
 const WEEKDAYS = [
   { value: 1, label: "Mon" },
@@ -57,6 +58,7 @@ export function TemplateDrawer({
   const [endDate, setEndDate] = useState(template?.endDate ?? "");
   const [isActive, setIsActive] = useState(template?.isActive ?? true);
   const [isStarred, setIsStarred] = useState(template?.isStarred ?? false);
+  const [leadDays, setLeadDays] = useState<number | null>(template?.leadDays ?? null);
 
   const [preview, setPreview] = useState<{ description: string; labels: string[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -128,6 +130,7 @@ export function TemplateDrawer({
       endDate: endDate || null,
       isActive,
       isStarred,
+      leadDays,
     };
 
     const response = await fetch(
@@ -390,6 +393,25 @@ export function TemplateDrawer({
                 )}
               </div>
 
+              <Field label="Show it in advance" hint={leadHint(frequency, leadDays)}>
+                <Select
+                  value={leadDays === null ? "default" : String(leadDays)}
+                  onChange={(e) =>
+                    setLeadDays(e.target.value === "default" ? null : Number(e.target.value))
+                  }
+                >
+                  <option value="default">
+                    Suggested for {frequency.toLowerCase().replace("_", "-")} (
+                    {describeLead(DEFAULT_LEAD_DAYS[frequency]).toLowerCase()})
+                  </option>
+                  {[0, 1, 2, 3, 5, 7, 14].map((days) => (
+                    <option key={days} value={days}>
+                      {describeLead(days)}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -559,4 +581,14 @@ function Field({
       {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
     </div>
   );
+}
+
+/**
+ * A monthly task that first appears at midnight on the day it is due has, in
+ * practice, one working day — and none of the morning, because nobody knew.
+ */
+function leadHint(frequency: Frequency, leadDays: number | null): string {
+  const days = leadDays ?? DEFAULT_LEAD_DAYS[frequency];
+  if (days === 0) return "It appears on their day only on the day it is due.";
+  return `It joins their day ${days === 1 ? "a day" : `${days} days`} early, under today's work, so it is not a surprise.`;
 }

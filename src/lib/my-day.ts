@@ -6,15 +6,19 @@
  * else — no counts to compute client-side, no second round trip.
  */
 
-import { InstanceStatus, Role, type PrismaClient } from "@prisma/client";
+import { Frequency, InstanceStatus, Role, type PrismaClient } from "@prisma/client";
 import { generateInstances } from "./recurrence";
 import { getSettings } from "./settings";
 import { daysLate } from "./instances";
+import { leadDaysFor } from "./lead-time";
 import {
   addDays,
   compareDateOnly,
-  maxDateOnly,
+  daysBetween,
+  endOfDayLondon,
   formatTimeLondon,
+  maxDateOnly,
+  startOfDayLondon,
   toDateOnly,
   toDbDate,
   todayInLondon,
@@ -35,6 +39,13 @@ export type MyDayTask = {
   categoryColour: string | null;
   /** Pinned to the top of the day, above the clock. */
   starred: boolean;
+  /**
+   * Due after today. Set on the Coming up list and nowhere else, so the screen
+   * never has to compare dates to know which half of it it is drawing.
+   */
+  upcoming?: boolean;
+  /** This one has reached its lead time — it wants to be seen now. */
+  withinLead?: boolean;
   /** Whether this member may still tick or untick it themselves. */
   editable: boolean;
 };
@@ -47,7 +58,17 @@ export type MyDay = {
   /** Progress ring: everything owed today, and how much of it is cleared. */
   owedTotal: number;
   owedDone: number;
+  /**
+   * Work due after today, nearest first. Deliberately not folded into the
+   * sections above: the day is what you owe now, and a list you cannot finish
+   * is the thing this screen exists not to be. The screen shows the ones whose
+   * lead time has arrived, and the rest only once today is clear.
+   */
+  comingUp: MyDayTask[];
 };
+
+/** Never look further ahead than generation reliably goes. */
+export const COMING_UP_DAYS = 14;
 
 /**
  * Belt and braces against a failed cron or a sleeping Railway service: make
@@ -79,18 +100,33 @@ export async function getMyDay(
     where: {
       assigneeId: user.id,
       organisationId: user.organisationId,
-      dueDate: { gte: toDbDate(from), lte: toDbDate(to) },
+      OR: [
+        { dueDate: { gte: toDbDate(from), lte: toDbDate(to) } },
+        // Anything finished today, whatever day it was due for. Without this,
+        // ticking next Friday's task on Tuesday makes it disappear: it is not
+        // in the window, so no Done row appears and the ring does not move.
+        // Work that vanishes when you do it is how people stop trusting a
+        // screen.
+        {
+          status: InstanceStatus.COMPLETED,
+          completedAt: { gte: startOfDayLondon(today), lte: endOfDayLondon(today) },
+        },
+      ],
     },
     include: {
       category: { select: { name: true, colour: true } },
       // isStarred is read live rather than frozen onto the instance: starring
       // is a statement about what matters now, so it has to reach today's list.
-      template: { select: { description: true, isStarred: true } },
+      template: {
+        select: { description: true, isStarred: true, frequency: true, leadDays: true },
+      },
     },
     orderBy: [{ dueDate: "asc" }, { dueAt: "asc" }, { title: "asc" }],
   });
 
   const tasks: MyDayTask[] = rows.map((row) => toTask(row, today));
+
+  const comingUp = await getComingUp(db, user, today);
 
   // Starred first, then the order the query already put them in. A star is a
   // manager saying "this one before the others", which is only worth anything
@@ -106,14 +142,20 @@ export async function getMyDay(
   const overdue = byStar(open.filter((t) => compareDateOnly(t.dueDate, today) < 0));
   const dueToday = byStar(open.filter((t) => t.dueDate === today));
 
-  // Everything cleared from what was owed — today's work, and any catch-up on
-  // an overdue item.
+  // Everything cleared from what was owed — today's work, any catch-up on an
+  // overdue item, and anything pulled forward from a later day.
   const doneToday = done;
 
-  const owedTotal = overdue.length + dueToday.length + doneToday.length;
-  const owedDone = doneToday.length;
+  // The ring is today's work and only today's. A task pulled forward from next
+  // week belongs in Done today — somebody did it today — but counting it here
+  // would let anyone improve the number without touching what is actually
+  // owed, and would make the two still open look like less of the day than
+  // they are.
+  const clearedToday = doneToday.filter((t) => compareDateOnly(t.dueDate, today) <= 0);
+  const owedTotal = overdue.length + dueToday.length + clearedToday.length;
+  const owedDone = clearedToday.length;
 
-  return { today, overdue, dueToday, doneToday, owedTotal, owedDone };
+  return { today, overdue, dueToday, doneToday, owedTotal, owedDone, comingUp };
 }
 
 function isEndOfDay(instant: Date): boolean {
@@ -129,8 +171,80 @@ type InstanceRow = {
   note: string | null;
   wasLate: boolean;
   category: { name: string; colour: string | null } | null;
-  template: { description: string | null; isStarred: boolean };
+  template: {
+    description: string | null;
+    isStarred: boolean;
+    frequency: Frequency;
+    leadDays: number | null;
+  };
 };
+
+/**
+ * Work due after today, nearest first.
+ *
+ * Every one of these already exists — generation runs two weeks ahead — so
+ * this is a question about what to draw, not what to create. Each carries
+ * whether its lead time has arrived, and the screen decides from there: the
+ * ones asking to be seen go under the day, and the rest wait for a day that
+ * is already clear.
+ */
+export async function getComingUp(
+  db: PrismaClient,
+  user: { id: string; organisationId: string },
+  today: DateOnly = todayInLondon(),
+): Promise<MyDayTask[]> {
+  const rows = await db.taskInstance.findMany({
+    where: {
+      assigneeId: user.id,
+      organisationId: user.organisationId,
+      status: InstanceStatus.PENDING,
+      dueDate: {
+        gt: toDbDate(today),
+        lte: toDbDate(addDays(today, COMING_UP_DAYS)),
+      },
+    },
+    include: {
+      category: { select: { name: true, colour: true } },
+      template: {
+        select: { description: true, isStarred: true, frequency: true, leadDays: true },
+      },
+    },
+    orderBy: [{ dueDate: "asc" }, { dueAt: "asc" }, { title: "asc" }],
+  });
+
+  // The next one of each, not every one of each. A weekly task shows its
+  // Friday, not this Friday and next Friday and the one after — the second
+  // occurrence tells you nothing the first did not and costs a row saying it.
+  const nextOfEach = new Map<string, (typeof rows)[number]>();
+  for (const row of rows) {
+    if (!nextOfEach.has(row.templateId)) nextOfEach.set(row.templateId, row);
+  }
+
+  return (
+    [...nextOfEach.values()]
+      /**
+       * Zero notice means zero notice, on a clear day as much as a busy one.
+       *
+       * This is what keeps the list useful rather than long. A daily task
+       * pulled forward is nonsense — tomorrow's ball count is a different
+       * count, and doing it today helps nobody — so showing four of them the
+       * moment somebody finishes early buries the weekly check and the
+       * monthly stocktake, which are the two things worth starting.
+       */
+      .filter((row) => leadDaysFor(row.template) > 0)
+      .map((row) => {
+        const task = toTask(row, today);
+        const dueIn = daysBetween(today, task.dueDate);
+        return {
+          ...task,
+          upcoming: true,
+          withinLead: dueIn <= leadDaysFor(row.template),
+          // Nothing ahead is late, whatever the arithmetic says about the date.
+          daysLate: 0,
+        };
+      })
+  );
+}
 
 /** One row, as the screen wants it. Shared so a preview cannot drift. */
 function toTask(row: InstanceRow, today: DateOnly): MyDayTask {
@@ -180,7 +294,9 @@ export async function getUpcomingDay(
     },
     include: {
       category: { select: { name: true, colour: true } },
-      template: { select: { description: true, isStarred: true } },
+      template: {
+        select: { description: true, isStarred: true, frequency: true, leadDays: true },
+      },
     },
     orderBy: [{ dueAt: "asc" }, { title: "asc" }],
   });
@@ -197,6 +313,9 @@ export async function getUpcomingDay(
     doneToday: [],
     owedTotal: dueToday.length,
     owedDone: 0,
+    // A preview of a single future day is already the answer to "what is
+    // coming"; a list of what is coming after it would be a different question.
+    comingUp: [],
   };
 }
 

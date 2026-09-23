@@ -27,6 +27,7 @@ import {
 import { getSettings } from "./settings";
 import { addDays, isTimeOfDay, toDateOnly, toDbDate, todayInLondon, type DateOnly } from "./time";
 import { ApiError } from "./errors";
+import { MAX_LEAD_DAYS } from "./lead-time";
 import { deleteObject } from "./storage";
 
 const dateOnly = z
@@ -51,6 +52,8 @@ export const templateInputSchema = z
     endDate: dateOnly.nullish(),
     isActive: z.boolean().default(true),
     isStarred: z.boolean().default(false),
+    /** Null means "whatever suits this frequency" — see DEFAULT_LEAD_DAYS. */
+    leadDays: z.number().int().min(0).max(MAX_LEAD_DAYS).nullish(),
   })
   .superRefine((value, ctx) => {
     if (value.frequency === Frequency.DAILY && value.daysOfWeek.length === 0) {
@@ -134,6 +137,7 @@ export async function createTemplate(
       startDate: toDbDate(input.startDate),
       isActive: input.isActive,
       isStarred: input.isStarred,
+      leadDays: input.leadDays ?? null,
       ...scheduleFieldsFor(input),
     },
   });
@@ -177,6 +181,7 @@ export async function updateTemplate(
       startDate: toDbDate(input.startDate),
       isActive: input.isActive,
       isStarred: input.isStarred,
+      leadDays: input.leadDays ?? null,
       ...scheduleFieldsFor(input),
     },
   });
@@ -407,6 +412,7 @@ export async function duplicateTemplate(
       dayOfMonth: source.dayOfMonth,
       dueTime: source.dueTime,
       isStarred: source.isStarred,
+      leadDays: source.leadDays,
       // A copy starts today, not on the original's start date — nobody wants
       // a duplicate that back-fills six months of history.
       startDate: toDbDate(today),
@@ -487,6 +493,7 @@ export const bulkChangesSchema = z
     endDate: dateOnly.nullable().optional(),
     isActive: z.boolean().optional(),
     isStarred: z.boolean().optional(),
+    leadDays: z.number().int().min(0).max(MAX_LEAD_DAYS).nullable().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, "Choose at least one thing to change");
 
@@ -570,6 +577,7 @@ type ExistingTemplate = {
   endDate: Date | null;
   isActive: boolean;
   isStarred: boolean;
+  leadDays: number | null;
 };
 
 /** Existing values, overlaid with whatever the edit actually named. */
@@ -593,5 +601,6 @@ function mergeChanges(template: ExistingTemplate, changes: BulkChanges) {
           : null,
     isActive: changes.isActive ?? template.isActive,
     isStarred: changes.isStarred ?? template.isStarred,
+    leadDays: "leadDays" in changes ? changes.leadDays : template.leadDays,
   };
 }

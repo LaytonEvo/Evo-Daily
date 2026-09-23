@@ -61,6 +61,7 @@ export default async function TemplatesPage() {
       endDate: template.endDate ? toDateOnly(template.endDate) : null,
       isActive: template.isActive,
       isStarred: template.isStarred,
+      leadDays: template.leadDays,
       scheduleLabel: describeSchedule(template),
       completionRate: totals?.completionRate ?? null,
       assignedLast30: totals?.assigned ?? 0,

@@ -6,7 +6,7 @@ import { InstanceStatus } from "@prisma/client";
 import { ProgressRing } from "@/components/progress-ring";
 import { useToast } from "@/components/ui/toast";
 import type { MyDay, MyDayTask } from "@/lib/my-day";
-import { formatDateOnlyLong } from "@/lib/time";
+import { dayName, daysBetween, formatDateOnly, formatDateOnlyLong, isoWeekday } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { TaskRow } from "./task-row";
 import { Section } from "./section";
@@ -50,10 +50,32 @@ export function MyDayScreen({
       ),
   );
 
+  const [showAllAhead, setShowAllAhead] = useState(false);
+
   const sections = useMemo(() => splitIntoSections(tasks, day), [tasks, day]);
-  const owedDone = sections.doneToday.length;
+  // Today's work only. Something pulled forward from next week shows in Done
+  // today, because it was done today, but it cannot flatter the ring: 6 of 8
+  // after ticking Friday's task makes the two still owed look like less of the
+  // day than they are.
+  const owedDone = sections.doneToday.filter((t) => t.dueDate <= day.today).length;
   const owedTotal = sections.overdue.length + sections.dueToday.length + owedDone;
   const allClear = owedTotal > 0 && owedDone === owedTotal;
+
+  /**
+   * Work that is not due yet, and how much of it to draw.
+   *
+   * On a normal day only the tasks asking to be seen — the ones whose lead
+   * time has arrived. On a day that is already clear, the rest as well,
+   * because that is the moment there is room for it. Capped either way: a long
+   * list of things you cannot finish today is exactly the overwhelm this
+   * screen is built to avoid, so the tail sits behind one line of text.
+   */
+  const ahead = useMemo(
+    () => (allClear ? sections.comingUp : sections.comingUp.filter((t) => t.withinLead)),
+    [sections.comingUp, allClear],
+  );
+  const comingUp = showAllAhead ? ahead : ahead.slice(0, COMING_UP_VISIBLE);
+  const hiddenAhead = ahead.length - comingUp.length;
 
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   // Overdue work lives behind its own tab. Today's list stays the clean thing
@@ -157,7 +179,9 @@ export function MyDayScreen({
             {readOnly ? `${firstName}'s day is cleared.` : "That is your day cleared."}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Nothing else is owed until tomorrow.
+            {sections.comingUp.length > 0
+              ? "Nothing else is owed today. Here is what is coming."
+              : "Nothing else is owed until tomorrow."}
           </p>
         </div>
       ) : null}
@@ -270,6 +294,45 @@ export function MyDayScreen({
             {/* Today only. An overdue task belongs to a day that has already
                 been and gone, so it has no place on this one's clock. */}
             <DayPlan tasks={[...sections.dueToday, ...sections.doneToday]} today={day.today} />
+
+            {comingUp.length > 0 ? (
+              <Section
+                title="Coming up"
+                count={comingUp.length}
+                description={
+                  allClear
+                    ? "Your day is clear, so here is the rest of the week. Tick anything you get to."
+                    : "Not due yet. Here early so it is not a surprise on the day."
+                }
+              >
+                {comingUp.map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    muted
+                    busy={pendingIds.has(task.id)}
+                    attachmentsEnabled={attachmentsEnabled}
+                    readOnly={readOnly}
+                    onToggle={(done, note) => setDone(task, done, note)}
+                    onSaveNote={(note) => saveNote(task, note)}
+                    trailing={
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {dueInLabel(task.dueDate, day.today)}
+                      </span>
+                    }
+                  />
+                ))}
+                {hiddenAhead > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllAhead(true)}
+                    className="h-10 text-sm font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                  >
+                    {hiddenAhead} more in the next fortnight
+                  </button>
+                ) : null}
+              </Section>
+            ) : null}
           </>
         )}
       </div>
@@ -326,7 +389,7 @@ function greeting(now: Date = new Date()): string {
 }
 
 function collectTasks(day: MyDay): MyDayTask[] {
-  return [...day.overdue, ...day.dueToday, ...day.doneToday];
+  return [...day.overdue, ...day.dueToday, ...day.doneToday, ...day.comingUp];
 }
 
 /**
@@ -340,6 +403,7 @@ function splitIntoSections(tasks: MyDayTask[], day: MyDay) {
 
   const originalOpen = pick([...day.overdue, ...day.dueToday]);
   const originalDone = pick(day.doneToday);
+  const ahead = pick(day.comingUp);
   const owed = [...originalOpen, ...originalDone];
 
   return {
@@ -349,6 +413,28 @@ function splitIntoSections(tasks: MyDayTask[], day: MyDay) {
     dueToday: owed.filter(
       (t) => t.status === InstanceStatus.PENDING && t.dueDate === day.today,
     ),
-    doneToday: owed.filter((t) => t.status === InstanceStatus.COMPLETED),
+    // Anything ticked lands here, including a task pulled forward from next
+    // week — otherwise doing it early makes it disappear.
+    doneToday: [
+      ...owed.filter((t) => t.status === InstanceStatus.COMPLETED),
+      ...ahead.filter((t) => t.status === InstanceStatus.COMPLETED),
+    ],
+    comingUp: ahead.filter((t) => t.status === InstanceStatus.PENDING),
   };
+}
+
+/** Enough to be useful, few enough that the day still reads as today's. */
+const COMING_UP_VISIBLE = 4;
+
+/**
+ * "Tomorrow", "Friday", or a date once the week names stop helping.
+ *
+ * A time of day would be wrong here: what matters about work that is not due
+ * yet is which day it lands on, not what hour of it.
+ */
+function dueInLabel(dueDate: string, today: string): string {
+  const days = daysBetween(today, dueDate);
+  if (days === 1) return "tomorrow";
+  if (days <= 6) return dayName(isoWeekday(dueDate), true);
+  return formatDateOnly(dueDate);
 }
