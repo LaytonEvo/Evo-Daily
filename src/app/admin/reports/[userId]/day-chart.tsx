@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { InstanceStatus } from "@prisma/client";
 import {
   Bar,
   BarChart,
@@ -11,11 +10,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Badge } from "@/components/ui/badge";
 import type { DayBreakdown } from "@/lib/reports";
 import { formatDateOnly, formatDateOnlyLong } from "@/lib/time";
 import { cn } from "@/lib/utils";
-import type { HistoryRow } from "./history-table";
+import { InstanceRows, type HistoryRow } from "./history-table";
 
 /**
  * Completed and missed, day by day.
@@ -32,10 +30,14 @@ import type { HistoryRow } from "./history-table";
 export function DayChart({
   days,
   rows,
+  attachmentsEnabled,
+  today,
 }: {
   days: DayBreakdown[];
   /** Every instance in the window — the same rows the history table holds. */
   rows: HistoryRow[];
+  attachmentsEnabled: boolean;
+  today: string;
 }) {
   const [openDate, setOpenDate] = useState<string | null>(null);
 
@@ -222,14 +224,16 @@ export function DayChart({
           {open.length === 0 ? (
             <p className="py-2 text-sm text-muted-foreground">Nothing was due that day.</p>
           ) : (
-            <ul className="flex flex-col divide-y">
-              {open.map((row) => (
-                <li key={row.id} className="flex items-center gap-2 py-2 text-sm">
-                  <span className="min-w-0 flex-1 truncate">{row.title}</span>
-                  <StatusBadge row={row} />
-                </li>
-              ))}
-            </ul>
+            // The same rows as everywhere else on the page: open one for its
+            // thread, or write it off, without leaving the chart.
+            <div className="-mx-3 overflow-hidden rounded-lg border bg-card">
+              <InstanceRows
+                rows={open}
+                attachmentsEnabled={attachmentsEnabled}
+                today={today}
+                showDue={false}
+              />
+            </div>
           )}
         </div>
       ) : null}
@@ -246,14 +250,6 @@ function Key({ className, label }: { className: string; label: string }) {
   );
 }
 
-function StatusBadge({ row }: { row: HistoryRow }) {
-  if (row.status === InstanceStatus.MISSED) return <Badge variant="destructive">Missed</Badge>;
-  if (row.status === InstanceStatus.COMPLETED) {
-    return row.wasLate ? <Badge variant="warning">Late</Badge> : <Badge variant="success">Done</Badge>;
-  }
-  if (row.status === InstanceStatus.EXCUSED) return <Badge variant="muted">Excused</Badge>;
-  return <Badge variant="muted">Open</Badge>;
-}
 
 type TooltipPayload = { payload: DayBreakdown & { onTime: number } };
 

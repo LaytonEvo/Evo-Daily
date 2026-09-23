@@ -7,8 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { CommentThread } from "@/app/my-day/comment-thread";
 import { NotDoneButton } from "./not-done-button";
 import { cn } from "@/lib/utils";
-import { formatDateOnly, formatTimeLondon } from "@/lib/time";
-import { rollUpByWeek } from "@/lib/reports";
+import { daysBetween, formatDateOnly, formatTimeLondon } from "@/lib/time";
+import { isOverdueRow, rollUpByWeek } from "@/lib/reports";
 import { WeekDrill } from "./week-drill";
 
 export type HistoryRow = {
@@ -58,7 +58,6 @@ export function HistoryTable({
   /** Supplied so "overdue" is decided in London, not in the reader's browser. */
   today?: string;
 }) {
-  const [open, setOpen] = useState<string | null>(null);
   const shown = rows.filter((r) => matchesFilter(r, filter));
 
   const weeks = useMemo(
@@ -86,34 +85,44 @@ export function HistoryTable({
         weeks={weeks}
         emptyLabel="Nothing in this window."
         renderRows={(dayRows) => (
-          <Rows
+          <InstanceRows
             rows={dayRows}
-            open={open}
-            setOpen={setOpen}
             attachmentsEnabled={attachmentsEnabled}
+            today={today}
+            showDue={false}
           />
         )}
       />
     );
   }
 
-  return (
-    <Rows rows={shown} open={open} setOpen={setOpen} attachmentsEnabled={attachmentsEnabled} />
-  );
+  return <InstanceRows rows={shown} attachmentsEnabled={attachmentsEnabled} today={today} />;
 }
 
-/** The rows themselves — a card list on a phone, a table above it. */
-function Rows({
+/**
+ * The rows themselves — a card list on a phone, a table above it.
+ *
+ * Exported because every list of instances on this page is the same list: the
+ * chart's day panel, the missed-and-overdue card, the history. They differed
+ * only in being read-only, which is exactly the thing that made the report
+ * somewhere you looked rather than somewhere you worked. One component, so a
+ * row can be opened, commented on and written off wherever it appears.
+ */
+export function InstanceRows({
   rows: shown,
-  open,
-  setOpen,
   attachmentsEnabled,
+  today,
+  showDue = true,
 }: {
   rows: HistoryRow[];
-  open: string | null;
-  setOpen: (id: string | null) => void;
   attachmentsEnabled: boolean;
+  /** Supplied so an open row can say how late it is, not just that it is open. */
+  today?: string;
+  /** Off where the day is already the heading above the rows. */
+  showDue?: boolean;
 }) {
+  const [open, setOpen] = useState<string | null>(null);
+
   return (
     <>
       {/* A phone cannot hold five columns without breaking titles onto one
@@ -126,6 +135,7 @@ function Rows({
             expanded={open === row.id}
             onToggle={() => setOpen(open === row.id ? null : row.id)}
             attachmentsEnabled={attachmentsEnabled}
+            today={today}
           />
         ))}
       </ul>
@@ -134,7 +144,7 @@ function Rows({
       <table className="w-full text-sm">
         <thead className="border-y bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
           <tr>
-            <th className="px-2 py-2.5 font-medium sm:px-3">Due</th>
+            {showDue ? <th className="px-2 py-2.5 font-medium sm:px-3">Due</th> : null}
             <th className="px-2 py-2.5 font-medium sm:px-3">Task</th>
             <th className="px-2 py-2.5 font-medium sm:px-3">Status</th>
             <th className="hidden px-2 py-2.5 font-medium sm:table-cell sm:px-3">Completed</th>
@@ -152,6 +162,8 @@ function Rows({
                 expanded={expanded}
                 onToggle={() => setOpen(expanded ? null : row.id)}
                 attachmentsEnabled={attachmentsEnabled}
+                today={today}
+                showDue={showDue}
               />
             );
           })}
@@ -168,11 +180,13 @@ function HistoryCard({
   expanded,
   onToggle,
   attachmentsEnabled,
+  today,
 }: {
   row: HistoryRow;
   expanded: boolean;
   onToggle: () => void;
   attachmentsEnabled: boolean;
+  today?: string;
 }) {
   const completed =
     row.completedAt instanceof Date
@@ -186,7 +200,7 @@ function HistoryCard({
       <div className="flex flex-col gap-2 p-3">
         <div className="flex items-start justify-between gap-2">
           <p className="min-w-0 flex-1 text-sm font-semibold leading-snug">{row.title}</p>
-          <StatusBadge status={row.status} wasLate={row.wasLate} />
+          <StatusBadge row={row} today={today} />
         </div>
 
         <p className="text-xs text-muted-foreground">
@@ -236,11 +250,15 @@ function FragmentRow({
   expanded,
   onToggle,
   attachmentsEnabled,
+  today,
+  showDue = true,
 }: {
   row: HistoryRow;
   expanded: boolean;
   onToggle: () => void;
   attachmentsEnabled: boolean;
+  today?: string;
+  showDue?: boolean;
 }) {
   const completed =
     row.completedAt instanceof Date ? row.completedAt : row.completedAt ? new Date(row.completedAt) : null;
@@ -248,12 +266,14 @@ function FragmentRow({
   return (
     <>
       <tr className={cn("border-b last:border-0", expanded && "bg-accent/40")}>
-        <td className="whitespace-nowrap px-2 py-2.5 text-muted-foreground sm:px-3">
-          {formatDateOnly(row.dueDate)}
-        </td>
+        {showDue ? (
+          <td className="whitespace-nowrap px-2 py-2.5 text-muted-foreground sm:px-3">
+            {formatDateOnly(row.dueDate)}
+          </td>
+        ) : null}
         <td className="max-w-[40vw] px-2 py-2.5 font-medium sm:max-w-none sm:px-3">{row.title}</td>
         <td className="px-2 py-2.5 sm:px-3">
-          <StatusBadge status={row.status} wasLate={row.wasLate} />
+          <StatusBadge row={row} today={today} />
         </td>
         <td className="hidden whitespace-nowrap px-2 py-2.5 text-muted-foreground sm:table-cell sm:px-3">
           {completed
@@ -289,7 +309,7 @@ function FragmentRow({
 
       {expanded ? (
         <tr className="border-b bg-accent/20 last:border-0">
-          <td colSpan={6} className="px-3 pb-4 pt-0 sm:px-4">
+          <td colSpan={showDue ? 6 : 5} className="px-3 pb-4 pt-0 sm:px-4">
             <CommentThread instanceId={row.id} attachmentsEnabled={attachmentsEnabled} />
           </td>
         </tr>
@@ -298,14 +318,21 @@ function FragmentRow({
   );
 }
 
-function StatusBadge({ status, wasLate }: { status: InstanceStatus; wasLate: boolean }) {
-  if (status === InstanceStatus.COMPLETED) {
-    return wasLate ? (
+function StatusBadge({ row, today }: { row: HistoryRow; today?: string }) {
+  if (row.status === InstanceStatus.COMPLETED) {
+    return row.wasLate ? (
       <Badge variant="warning">Completed late</Badge>
     ) : (
       <Badge variant="success">Completed</Badge>
     );
   }
-  if (status === InstanceStatus.MISSED) return <Badge variant="destructive">Missed</Badge>;
+  if (row.status === InstanceStatus.MISSED) return <Badge variant="destructive">Missed</Badge>;
+
+  // An open task from last Tuesday and an open task from this morning are not
+  // the same news, and "Open" says the same thing about both.
+  if (today && isOverdueRow(row, today)) {
+    const late = daysBetween(row.dueDate, today);
+    return <Badge variant="warning">{late === 1 ? "1 day late" : `${late} days late`}</Badge>;
+  }
   return <Badge variant="muted">Open</Badge>;
 }

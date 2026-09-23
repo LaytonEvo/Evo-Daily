@@ -173,12 +173,18 @@ export default async function PersonReportPage({
             <CardHeader>
               <CardTitle>Day by day</CardTitle>
               <CardDescription>
-                What was cleared and what was not, each day in this window. Tap a day for the
-                tasks behind it.
+                What was cleared and what was not, each day in this window. Tap a day to open
+                its tasks below — comment on one, or write it off as not done, without leaving
+                the chart.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <DayChart days={days} rows={report.history} />
+              <DayChart
+                days={days}
+                rows={report.history}
+                attachmentsEnabled={storageEnabled()}
+                today={today}
+              />
             </CardContent>
           </Card>
 
@@ -192,7 +198,11 @@ export default async function PersonReportPage({
               </CardDescription>
             </CardHeader>
             <CardContent className="px-0 sm:px-0">
-              <OutstandingList rows={outstandingRows} today={today} />
+              <OutstandingList
+                rows={outstandingRows}
+                today={today}
+                attachmentsEnabled={storageEnabled()}
+              />
             </CardContent>
           </Card>
 

@@ -40,6 +40,7 @@ export function UsersScreen({
   users,
   categories,
   absences,
+  settings,
   signInLog,
   today,
 }: {
@@ -47,6 +48,7 @@ export function UsersScreen({
   users: Person[];
   categories: Category[];
   absences: AbsenceRow[];
+  settings?: React.ReactNode;
   signInLog?: React.ReactNode;
   today: DateOnly;
 }) {
@@ -184,6 +186,8 @@ export function UsersScreen({
         absences={absences}
         people={users.map((u) => ({ id: u.id, name: u.name, isActive: u.isActive }))}
       />
+
+      {settings}
 
       {signInLog}
 

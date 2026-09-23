@@ -6,6 +6,8 @@ import { lastSeenByUser, recentSignIns } from "@/lib/sign-ins";
 import { toDateOnly, todayInLondon } from "@/lib/time";
 import { UsersScreen } from "./users-screen";
 import { SignInLog } from "./sign-in-log";
+import { GraceEditor } from "./grace-editor";
+import { getSettings } from "@/lib/settings";
 
 export const metadata = { title: "People · EvoTasks" };
 export const dynamic = "force-dynamic";
@@ -14,7 +16,7 @@ export default async function UsersPage() {
   const admin = await requireAdminPage();
   const today = todayInLondon();
 
-  const [users, categories, absences, signIns, lastSeen] = await Promise.all([
+  const [users, categories, absences, signIns, lastSeen, settings] = await Promise.all([
     prisma.user.findMany({
       where: { organisationId: admin.organisationId },
       select: {
@@ -40,6 +42,7 @@ export default async function UsersPage() {
     listAbsences(prisma, admin.organisationId),
     recentSignIns(prisma, admin.organisationId),
     lastSeenByUser(prisma, admin.organisationId),
+    getSettings(prisma, admin.organisationId),
   ]);
 
   return (
@@ -82,6 +85,7 @@ export default async function UsersPage() {
         // A server component handed through as a slot: the screen around it is
         // a client component, and lib/sign-ins reaches for Prisma.
         today={today}
+        settings={<GraceEditor graceDays={settings.graceDays} />}
         signInLog={<SignInLog rows={signIns} today={today} />}
       />
     </AppShell>
