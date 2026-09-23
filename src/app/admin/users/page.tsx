@@ -6,8 +6,9 @@ import { lastSeenByUser, recentSignIns } from "@/lib/sign-ins";
 import { toDateOnly, todayInLondon } from "@/lib/time";
 import { UsersScreen } from "./users-screen";
 import { SignInLog } from "./sign-in-log";
-import { GraceEditor } from "./grace-editor";
+import { SettingsEditor } from "./settings-editor";
 import { getSettings } from "@/lib/settings";
+import { leadDaysFor } from "@/lib/lead-time";
 
 export const metadata = { title: "People · EvoTasks" };
 export const dynamic = "force-dynamic";
@@ -16,7 +17,8 @@ export default async function UsersPage() {
   const admin = await requireAdminPage();
   const today = todayInLondon();
 
-  const [users, categories, absences, signIns, lastSeen, settings] = await Promise.all([
+  const [users, categories, absences, signIns, lastSeen, settings, noticeSources] =
+    await Promise.all([
     prisma.user.findMany({
       where: { organisationId: admin.organisationId },
       select: {
@@ -43,7 +45,17 @@ export default async function UsersPage() {
     recentSignIns(prisma, admin.organisationId),
     lastSeenByUser(prisma, admin.organisationId),
     getSettings(prisma, admin.organisationId),
+    prisma.taskTemplate.findMany({
+      where: { organisationId: admin.organisationId, isActive: true },
+      select: { frequency: true, leadDays: true },
+    }),
   ]);
+
+  // The most notice any task asks for. If it reaches past the horizon the
+  // setting silently does less than it says, so the card can point that out
+  // rather than leaving somebody to wonder why the stocktake never appears
+  // early.
+  const longestNotice = noticeSources.reduce((most, t) => Math.max(most, leadDaysFor(t)), 0);
 
   return (
     <AppShell user={admin} active="users" title="People">
@@ -85,7 +97,13 @@ export default async function UsersPage() {
         // A server component handed through as a slot: the screen around it is
         // a client component, and lib/sign-ins reaches for Prisma.
         today={today}
-        settings={<GraceEditor graceDays={settings.graceDays} />}
+        settings={
+          <SettingsEditor
+            graceDays={settings.graceDays}
+            generationHorizonDays={settings.generationHorizonDays}
+            longestNotice={longestNotice}
+          />
+        }
         signInLog={<SignInLog rows={signIns} today={today} />}
       />
     </AppShell>

@@ -8,7 +8,7 @@
  * has to stop exactly where the new window does.
  */
 
-import { InstanceStatus } from "@prisma/client";
+import { Frequency, InstanceStatus } from "@prisma/client";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   createTemplate,
@@ -19,6 +19,7 @@ import {
   type Fixture,
 } from "./helpers/db";
 import { generateInstances } from "@/lib/recurrence";
+import { getComingUp } from "@/lib/my-day";
 import { getSettings, settingsInputSchema, updateSettings } from "@/lib/settings";
 import { addDays, toDateOnly } from "@/lib/time";
 
@@ -28,6 +29,17 @@ const describeDb = available ? describe : describe.skip;
 const TODAY = "2026-09-23"; // Wednesday
 
 describe("settingsInputSchema", () => {
+  it("refuses an empty change", () => {
+    expect(settingsInputSchema.safeParse({}).success).toBe(false);
+  });
+
+  it("bounds the horizon to something generation can actually keep up with", () => {
+    expect(settingsInputSchema.safeParse({ generationHorizonDays: 7 }).success).toBe(true);
+    expect(settingsInputSchema.safeParse({ generationHorizonDays: 180 }).success).toBe(true);
+    expect(settingsInputSchema.safeParse({ generationHorizonDays: 6 }).success).toBe(false);
+    expect(settingsInputSchema.safeParse({ generationHorizonDays: 181 }).success).toBe(false);
+  });
+
   it("accepts a same-day window and refuses a negative one", () => {
     expect(settingsInputSchema.safeParse({ graceDays: 0 }).success).toBe(true);
     expect(settingsInputSchema.safeParse({ graceDays: -1 }).success).toBe(false);
@@ -155,5 +167,99 @@ describeDb("updating the catch-up window", () => {
     expect((await getSettings(prisma, elsewhere.id)).graceDays).toBe(14);
     const after = await prisma.taskInstance.findUniqueOrThrow({ where: { id: theirs.id } });
     expect(after.status).toBe(InstanceStatus.PENDING);
+  });
+});
+
+describeDb("the generation horizon", () => {
+  let fixture: Fixture;
+
+  beforeEach(async () => {
+    fixture = await seedFixture({ graceDays: 1, generationHorizonDays: 14 });
+    await createTemplate(fixture, {
+      title: "Every day",
+      startDate: addDays(TODAY, -1),
+      daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+      assigneeId: fixture.memberId,
+    });
+    await generateInstances(prisma, TODAY, addDays(TODAY, 14));
+  });
+
+  const furthestOut = async () => {
+    const rows = await prisma.taskInstance.findMany({
+      orderBy: { dueDate: "desc" },
+      take: 1,
+      select: { dueDate: true },
+    });
+    return rows[0] ? toDateOnly(rows[0].dueDate) : null;
+  };
+
+  it("fills the new days on save rather than waiting for the cron", async () => {
+    expect(await furthestOut()).toBe(addDays(TODAY, 14));
+
+    const result = await updateSettings(
+      prisma,
+      fixture.orgId,
+      { generationHorizonDays: 30 },
+      TODAY,
+    );
+
+    expect(result.generated).toBeGreaterThan(0);
+    expect(await furthestOut()).toBe(addDays(TODAY, 30));
+  });
+
+  it("leaves what already exists when it is shortened", async () => {
+    await updateSettings(prisma, fixture.orgId, { generationHorizonDays: 30 }, TODAY);
+
+    const result = await updateSettings(
+      prisma,
+      fixture.orgId,
+      { generationHorizonDays: 14 },
+      TODAY,
+    );
+
+    // Unstarted work nobody has seen. Deleting it to satisfy a number would be
+    // churn, and the screens read no further than the setting anyway.
+    expect(result.generated).toBe(0);
+    expect(await furthestOut()).toBe(addDays(TODAY, 30));
+  });
+
+  it("changes one setting without disturbing the other", async () => {
+    await updateSettings(prisma, fixture.orgId, { generationHorizonDays: 30 }, TODAY);
+    expect((await getSettings(prisma, fixture.orgId)).graceDays).toBe(1);
+
+    await updateSettings(prisma, fixture.orgId, { graceDays: 3 }, TODAY);
+    const after = await getSettings(prisma, fixture.orgId);
+    expect(after).toMatchObject({ graceDays: 3, generationHorizonDays: 30 });
+  });
+
+  it("lets somebody be shown work as far out as the horizon reaches", async () => {
+    const due = addDays(TODAY, 20);
+    const template = await createTemplate(fixture, {
+      title: "Monthly stock take",
+      frequency: Frequency.ONE_OFF,
+      startDate: due,
+      endDate: due,
+      assigneeId: fixture.memberId,
+    });
+    await prisma.taskTemplate.update({ where: { id: template.id }, data: { leadDays: 21 } });
+
+    // Twenty days out, with a fortnight of instances: the row does not exist
+    // to show, whatever notice the task asks for.
+    await generateInstances(prisma, TODAY, addDays(TODAY, 14));
+    let ahead = await getComingUp(
+      prisma,
+      { id: fixture.memberId, organisationId: fixture.orgId },
+      TODAY,
+    );
+    expect(ahead.map((t) => t.title)).not.toContain("Monthly stock take");
+
+    await updateSettings(prisma, fixture.orgId, { generationHorizonDays: 30 }, TODAY);
+
+    ahead = await getComingUp(
+      prisma,
+      { id: fixture.memberId, organisationId: fixture.orgId },
+      TODAY,
+    );
+    expect(ahead.map((t) => t.title)).toContain("Monthly stock take");
   });
 });

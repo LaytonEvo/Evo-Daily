@@ -67,8 +67,13 @@ export type MyDay = {
   comingUp: MyDayTask[];
 };
 
-/** Never look further ahead than generation reliably goes. */
-export const COMING_UP_DAYS = 14;
+/**
+ * Never look further ahead than generation reliably goes.
+ *
+ * There is no point offering a month of notice on a stocktake when only a
+ * fortnight of instances exist: the row is not there to show. So the two move
+ * together — the horizon is the setting, and this follows it.
+ */
 
 /**
  * Belt and braces against a failed cron or a sleeping Railway service: make
@@ -193,6 +198,8 @@ export async function getComingUp(
   user: { id: string; organisationId: string },
   today: DateOnly = todayInLondon(),
 ): Promise<MyDayTask[]> {
+  const { generationHorizonDays } = await getSettings(db, user.organisationId);
+
   const rows = await db.taskInstance.findMany({
     where: {
       assigneeId: user.id,
@@ -200,7 +207,7 @@ export async function getComingUp(
       status: InstanceStatus.PENDING,
       dueDate: {
         gt: toDbDate(today),
-        lte: toDbDate(addDays(today, COMING_UP_DAYS)),
+        lte: toDbDate(addDays(today, generationHorizonDays)),
       },
     },
     include: {

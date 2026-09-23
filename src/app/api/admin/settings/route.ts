@@ -9,7 +9,12 @@ export async function PUT(request: Request) {
     const admin = await requireApiAdmin();
     const input = settingsInputSchema.parse(await request.json());
     const settings = await updateSettings(prisma, admin.organisationId, input);
-    return NextResponse.json({ graceDays: settings.graceDays, swept: settings.swept });
+    return NextResponse.json({
+      graceDays: settings.graceDays,
+      generationHorizonDays: settings.generationHorizonDays,
+      swept: settings.swept,
+      generated: settings.generated,
+    });
   } catch (error) {
     return errorResponse(error);
   }
