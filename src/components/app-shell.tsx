@@ -2,29 +2,53 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Role } from "@prisma/client";
-import { CalendarCheck, LayoutGrid, Menu, Repeat, Users, X } from "lucide-react";
+import { CalendarCheck, LayoutGrid, Menu, MessageSquare, Repeat, Users, X } from "lucide-react";
 import { SignOutButton } from "./sign-out-button";
 import { ThemeToggle } from "./theme-toggle";
 import type { SessionUser } from "@/lib/guards";
 import { cn } from "@/lib/utils";
 
-type NavItem = { href: string; label: string; key: string; icon: typeof LayoutGrid };
+type NavItem = {
+  href: string;
+  label: string;
+  key: string;
+  icon: typeof LayoutGrid;
+  /** Shows the unread message count when there is one. */
+  badge?: boolean;
+};
+
+const MESSAGES: NavItem = {
+  href: "/messages",
+  label: "Messages",
+  key: "messages",
+  icon: MessageSquare,
+  badge: true,
+};
 
 const ADMIN_NAV: NavItem[] = [
   { href: "/my-day", label: "My day", key: "my-day", icon: CalendarCheck },
   { href: "/admin/templates", label: "Tasks", key: "templates", icon: Repeat },
   { href: "/admin/reports", label: "Reports", key: "reports", icon: LayoutGrid },
   { href: "/admin/users", label: "People", key: "users", icon: Users },
+  MESSAGES,
+];
+
+/**
+ * Members used to have no navigation at all: one screen, so a sidebar holding
+ * a single link would have been furniture. A second screen changes that, and
+ * two links are worth a sidebar when one of them carries a count somebody is
+ * waiting on.
+ */
+const MEMBER_NAV: NavItem[] = [
+  { href: "/my-day", label: "My day", key: "my-day", icon: CalendarCheck },
+  MESSAGES,
 ];
 
 /**
  * Horizon's shell: a fixed sidebar alongside the content on desktop, the same
  * sidebar as a slide-in drawer on a phone.
- *
- * Members have exactly one screen, so they get no navigation at all — a
- * sidebar holding a single link that goes where you already are is furniture,
- * not wayfinding. They still get the header, for the sign-out.
  */
 export function AppShell({
   user,
@@ -37,8 +61,9 @@ export function AppShell({
   title?: string;
   children: React.ReactNode;
 }) {
-  const nav = user.role === Role.ADMIN ? ADMIN_NAV : [];
+  const nav = user.role === Role.ADMIN ? ADMIN_NAV : MEMBER_NAV;
   const [open, setOpen] = useState(false);
+  const unread = useUnreadCount();
 
   // A drawer that survives the navigation it triggered would cover the page
   // it just opened.
@@ -60,7 +85,7 @@ export function AppShell({
       {hasNav ? (
         <>
           <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-sidebar px-5 py-7 shadow-card xl:flex">
-            <SidebarBody nav={nav} active={active} />
+            <SidebarBody nav={nav} active={active} unread={unread} />
           </aside>
 
           {open ? (
@@ -84,7 +109,12 @@ export function AppShell({
                 >
                   <X className="h-5 w-5" />
                 </button>
-                <SidebarBody nav={nav} active={active} onNavigate={() => setOpen(false)} />
+                <SidebarBody
+                  nav={nav}
+                  active={active}
+                  unread={unread}
+                  onNavigate={() => setOpen(false)}
+                />
               </aside>
             </div>
           ) : null}
@@ -100,9 +130,17 @@ export function AppShell({
                 aria-label="Open menu"
                 aria-expanded={open}
                 onClick={() => setOpen(true)}
-                className="-ml-1 rounded-xl p-2 text-foreground hover:bg-accent hover:text-accent-foreground xl:hidden"
+                className="relative -ml-1 rounded-xl p-2 text-foreground hover:bg-accent hover:text-accent-foreground xl:hidden"
               >
                 <Menu className="h-6 w-6" />
+                {/* On a phone the sidebar is behind this button, so the count
+                    has to be on the button or nobody sees it. */}
+                {unread > 0 ? (
+                  <span
+                    aria-hidden="true"
+                    className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-background"
+                  />
+                ) : null}
               </button>
             ) : null}
 
@@ -134,10 +172,12 @@ export function AppShell({
 function SidebarBody({
   nav,
   active,
+  unread,
   onNavigate,
 }: {
   nav: NavItem[];
   active?: string;
+  unread: number;
   onNavigate?: () => void;
 }) {
   return (
@@ -167,6 +207,11 @@ function SidebarBody({
             >
               <Icon className="h-5 w-5 shrink-0" />
               {item.label}
+              {item.badge && unread > 0 ? (
+                <span className="ml-auto rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-primary-foreground">
+                  {unread > 99 ? "99+" : unread}
+                </span>
+              ) : null}
               {isActive ? (
                 <span className="absolute inset-y-2 right-0 w-1 rounded-full bg-primary" />
               ) : null}
@@ -176,4 +221,45 @@ function SidebarBody({
       </nav>
     </>
   );
+}
+
+/**
+ * The unread count, polled rather than rendered once.
+ *
+ * A reply can land while somebody is sitting on a screen, and a number
+ * rendered at request time goes stale exactly when it matters. Also refreshed
+ * when the tab regains focus, which covers the common case of replying on a
+ * phone and coming back to the laptop.
+ */
+function useUnreadCount(): number {
+  const [unread, setUnread] = useState(0);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const read = async () => {
+      try {
+        const response = await fetch("/api/me/unread");
+        if (!response.ok) return;
+        const body = (await response.json()) as { unread?: number };
+        if (!cancelled) setUnread(body.unread ?? 0);
+      } catch {
+        // A badge is not worth a visible failure.
+      }
+    };
+
+    void read();
+    const timer = setInterval(read, 60_000);
+    const onFocus = () => void read();
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [pathname]);
+
+  return unread;
 }

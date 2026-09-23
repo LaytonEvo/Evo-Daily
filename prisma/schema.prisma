@@ -59,6 +59,7 @@ model User {
   coveringTasks      AbsenceCover[] @relation("AbsenceCoverPerTask")
   bookedAbsences     Absence[]      @relation("AbsenceCreator")
   signIns            SignIn[]
+  commentReads       CommentRead[]
 
   @@index([organisationId, isActive])
 }
@@ -161,6 +162,7 @@ model TaskInstance {
   category     Category?    @relation(fields: [categoryId], references: [id])
   auditLogs    AuditLog[]
   comments     Comment[]
+  reads        CommentRead[]
 
   @@unique([templateId, dueDate]) // idempotency guarantee — critical
   @@index([assigneeId, dueDate])
@@ -213,6 +215,26 @@ model Settings {
 /// A comment on one dated occurrence of a task, not on the recurring rule.
 /// The rule is a template and lives forever; what went wrong on Tuesday
 /// belongs to Tuesday.
+/**
+ * How far somebody has read one task's thread.
+ *
+ * One row per person per thread rather than a single "messages last opened"
+ * stamp on the user: with one stamp, opening the list to read one reply marks
+ * every other thread read too, and an unread count that lies once is one
+ * nobody trusts again.
+ */
+model CommentRead {
+  userId     String
+  instanceId String
+  readAt     DateTime @default(now())
+
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instance TaskInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@id([userId, instanceId])
+  @@index([userId])
+}
+
 model Comment {
   id             String   @id @default(cuid())
   organisationId String
