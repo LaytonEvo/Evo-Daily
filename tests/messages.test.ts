@@ -87,7 +87,7 @@ describeDb("message threads", () => {
     await say(alexsTask, fixture.otherMemberId, "Courier did not turn up.");
 
     const threads = await threadsFor(prisma, admin());
-    expect(threads.map((t) => t.instanceId)).toEqual([alexsTask]);
+    expect(threads.map((t) => t.id)).toEqual([alexsTask]);
     expect(threads[0].assignedToMe).toBe(false);
     // The admin wrote one of the two; only the answer is news.
     expect(threads[0].unread).toBe(1);
@@ -281,7 +281,7 @@ describeDb("the everyone view", () => {
     expect(await threadsFor(prisma, luke(), "mine")).toEqual([]);
 
     const all = await threadsFor(prisma, luke(), "all");
-    expect(all.map((t) => t.instanceId)).toEqual([alexsTask]);
+    expect(all.map((t) => t.id)).toEqual([alexsTask]);
     expect(all[0].inThread).toBe(false);
   });
 
@@ -368,6 +368,6 @@ describeDb("the everyone view", () => {
     });
 
     const all = await threadsFor(prisma, luke(), "all");
-    expect(all.map((t) => t.instanceId)).not.toContain(theirs.id);
+    expect(all.map((t) => t.id)).not.toContain(theirs.id);
   });
 });

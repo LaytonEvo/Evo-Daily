@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, MessageSquare } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { CommentThread } from "@/app/my-day/comment-thread";
+import { DayCheckThread } from "./day-check-thread";
 import { formatDateOnly } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -19,7 +20,8 @@ type Comment = {
 };
 
 export type ThreadRow = {
-  instanceId: string;
+  id: string;
+  kind: "task" | "day-check";
   title: string;
   dueDate: string;
   assigneeName: string;
@@ -66,7 +68,7 @@ export function MessagesScreen({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState<string | null>(() =>
-    readOnly ? null : (threads.find((t) => t.unread > 0)?.instanceId ?? null),
+    readOnly ? null : (threads.find((t) => t.unread > 0)?.id ?? null),
   );
   const [read, setRead] = useState<Set<string>>(new Set());
 
@@ -80,7 +82,7 @@ export function MessagesScreen({
    */
   useEffect(() => {
     if (readOnly || !open) return;
-    const thread = threads.find((t) => t.instanceId === open);
+    const thread = threads.find((t) => t.id === open);
     if (!thread || thread.unread === 0 || read.has(open)) return;
 
     setRead((current) => new Set(current).add(open));
@@ -94,7 +96,7 @@ export function MessagesScreen({
   }, [open, threads, read, router, readOnly]);
 
   function toggle(thread: ThreadRow) {
-    setOpen(open === thread.instanceId ? null : thread.instanceId);
+    setOpen(open === thread.id ? null : thread.id);
   }
 
   const tabs = scope ? (
@@ -134,18 +136,18 @@ export function MessagesScreen({
           ? `Every conversation on ${unreadBy ? `${unreadBy}'s` : "their"} tasks, as they see it. Reply from the task itself or from your own Messages — a comment written here would be from you, not them, and this screen is for reading.`
           : scope === "all"
             ? "Every task in the team that anybody has written on."
-            : "Every task you own or have written on. Replies land here whatever day the task was for."}
+            : "Every task you own or have written on, and every under-half day answered. Replies land here whatever day the task was for."}
       </p>
 
       <div className="flex flex-col gap-2">
         {threads.map((thread) => {
-          const expanded = open === thread.instanceId;
+          const expanded = open === thread.id;
           const last = thread.comments[thread.comments.length - 1];
-          const unread = read.has(thread.instanceId) ? 0 : thread.unread;
+          const unread = read.has(thread.id) ? 0 : thread.unread;
 
           return (
             <div
-              key={thread.instanceId}
+              key={thread.id}
               className={cn(
                 "overflow-hidden rounded-lg border bg-card",
                 unread > 0 && "border-primary/40",
@@ -204,13 +206,21 @@ export function MessagesScreen({
 
               {expanded ? (
                 <div className="border-t px-3 pb-3 sm:px-4">
-                  {/* The same thread component the task rows mount, so a reply
-                      written here is the same reply written there. */}
-                  <CommentThread
-                    instanceId={thread.instanceId}
-                    attachmentsEnabled={attachmentsEnabled}
-                    readOnly={readOnly}
-                  />
+                  {thread.kind === "day-check" ? (
+                    <DayCheckThread
+                      dayCheckId={thread.id}
+                      messages={thread.comments}
+                      readOnly={readOnly}
+                    />
+                  ) : (
+                    /* The same thread component the task rows mount, so a reply
+                       written here is the same reply written there. */
+                    <CommentThread
+                      instanceId={thread.id}
+                      attachmentsEnabled={attachmentsEnabled}
+                      readOnly={readOnly}
+                    />
+                  )}
                 </div>
               ) : null}
             </div>

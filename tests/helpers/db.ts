@@ -39,6 +39,11 @@ export async function databaseAvailable(): Promise<boolean> {
 }
 
 export async function resetDatabase(): Promise<void> {
+  // Replies are cleared explicitly: they cascade from the day check, but their
+  // author does not cascade, so deleting the admin who replied and the member
+  // the check is about in one sweep can race into a foreign key error.
+  await prisma.dayCheckReply.deleteMany();
+  await prisma.dayCheck.deleteMany();
   await prisma.signIn.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.absence.deleteMany();

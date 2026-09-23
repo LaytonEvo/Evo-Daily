@@ -37,8 +37,12 @@ export type ThreadComment = {
 
 export type ThreadScope = "mine" | "all";
 
+export type ThreadKind = "task" | "day-check";
+
 export type Thread = {
-  instanceId: string;
+  /** The instance id, or the day check id. Unique either way. */
+  id: string;
+  kind: ThreadKind;
   title: string;
   dueDate: DateOnly;
   assigneeName: string;
@@ -96,9 +100,11 @@ export async function threadsFor(
     take: COMMENT_SCAN,
   });
   const ids = [...new Set(recent.map((c) => c.instanceId))].slice(0, MAX_THREADS);
-  if (ids.length === 0) return [];
 
-  const instances = await db.taskInstance.findMany({
+  // Not an early return, however tempting: day checks are threads too, and
+  // somebody whose only message is an under-half answer has no task comments
+  // at all. Returning here would show them an empty inbox.
+  const instances = ids.length === 0 ? [] : await db.taskInstance.findMany({
     where: { id: { in: ids } },
     select: {
       id: true,
@@ -137,7 +143,8 @@ export async function threadsFor(
     }));
 
     return {
-      instanceId: instance.id,
+      id: instance.id,
+      kind: "task" as const,
       title: instance.title,
       dueDate: toDateOnly(instance.dueDate),
       assigneeName: instance.assignee.name,
@@ -153,9 +160,100 @@ export async function threadsFor(
     };
   });
 
+  const checks = await dayCheckThreads(db, viewer, everyone);
+
   // By the last thing said, not by when the task was due: a three-week-old
   // task somebody answered this morning is the one you came here for.
-  return threads.sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime());
+  return [...threads, ...checks].sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime());
+}
+
+/**
+ * Under-half answers, as threads.
+ *
+ * A day check is addressed to the admins, so they are in the thread by right
+ * rather than by having replied — which is the difference between this and a
+ * task conversation, where reading over somebody's shoulder earns you no
+ * badge. The point of the question is that somebody reads the answer.
+ */
+async function dayCheckThreads(
+  db: PrismaClient,
+  viewer: Viewer,
+  everyone: boolean,
+): Promise<Thread[]> {
+  const admin = viewer.role === Role.ADMIN;
+
+  // A member sees their own. An admin sees the team's, because that is who the
+  // answer was written for.
+  if (!admin && everyone) return [];
+  const checks = await db.dayCheck.findMany({
+    where: {
+      organisationId: viewer.organisationId,
+      ...(admin ? {} : { userId: viewer.id }),
+    },
+    orderBy: { createdAt: "desc" },
+    take: MAX_THREADS,
+    select: {
+      id: true,
+      userId: true,
+      day: true,
+      completed: true,
+      total: true,
+      reason: true,
+      createdAt: true,
+      user: { select: { name: true } },
+      replies: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          body: true,
+          createdAt: true,
+          authorId: true,
+          author: { select: { name: true } },
+        },
+      },
+      reads: { where: { userId: viewer.id }, select: { readAt: true } },
+    },
+  });
+
+  return checks.map((check) => {
+    const readAt = check.reads[0]?.readAt ?? null;
+
+    // The answer itself is the first thing said, so it reads as a message and
+    // not as a header with a conversation stuck underneath it.
+    const comments: ThreadComment[] = [
+      {
+        id: check.id,
+        body: check.reason,
+        createdAt: check.createdAt,
+        authorId: check.userId,
+        authorName: check.user.name,
+        mine: check.userId === viewer.id,
+        attachments: 0,
+      },
+      ...check.replies.map((reply) => ({
+        id: reply.id,
+        body: reply.body,
+        createdAt: reply.createdAt,
+        authorId: reply.authorId,
+        authorName: reply.author.name,
+        mine: reply.authorId === viewer.id,
+        attachments: 0,
+      })),
+    ];
+
+    return {
+      id: check.id,
+      kind: "day-check" as const,
+      title: `Under half \u2014 ${check.completed} of ${check.total} done`,
+      dueDate: toDateOnly(check.day),
+      assigneeName: check.user.name,
+      assignedToMe: check.userId === viewer.id,
+      inThread: true,
+      comments,
+      unread: comments.filter((c) => !c.mine && (readAt === null || c.createdAt > readAt)).length,
+      lastAt: comments[comments.length - 1].createdAt,
+    };
+  });
 }
 
 /**
@@ -183,6 +281,11 @@ export async function markThreadRead(
   viewer: Viewer,
   instanceId: string,
 ): Promise<boolean> {
+  // The client sends one id for both kinds of thread. Ids do not collide, so
+  // the kind is recoverable without the caller having to say which it meant —
+  // and a caller who has to say is a caller who can say the wrong thing.
+  if (await markDayCheckRead(db, viewer, instanceId)) return true;
+
   const allowed = await db.taskInstance.findFirst({
     where: {
       id: instanceId,
@@ -244,4 +347,63 @@ export async function threadsForMember(
     person: { id: person.id, name: person.name, isActive: person.isActive },
     threads,
   };
+}
+
+
+/** Mark a day check read, if that is what this id is. */
+async function markDayCheckRead(
+  db: PrismaClient,
+  viewer: Viewer,
+  dayCheckId: string,
+): Promise<boolean> {
+  const check = await db.dayCheck.findFirst({
+    where: {
+      id: dayCheckId,
+      organisationId: viewer.organisationId,
+      ...(viewer.role === Role.ADMIN ? {} : { userId: viewer.id }),
+    },
+    select: { id: true },
+  });
+  if (!check) return false;
+
+  const readAt = new Date();
+  await db.dayCheckRead.upsert({
+    where: { userId_dayCheckId: { userId: viewer.id, dayCheckId } },
+    create: { userId: viewer.id, dayCheckId, readAt },
+    update: { readAt },
+  });
+  return true;
+}
+
+/**
+ * Reply to a day check.
+ *
+ * Same audience as reading it: the person it is about, and the admins. A
+ * member cannot answer somebody else's bad day, and an admin replying is the
+ * entire point of routing these into Messages rather than a report nobody
+ * opens.
+ */
+export async function replyToDayCheck(
+  db: PrismaClient,
+  viewer: Viewer,
+  dayCheckId: string,
+  body: string,
+): Promise<boolean> {
+  const text = body.trim();
+  if (!text) return false;
+
+  const check = await db.dayCheck.findFirst({
+    where: {
+      id: dayCheckId,
+      organisationId: viewer.organisationId,
+      ...(viewer.role === Role.ADMIN ? {} : { userId: viewer.id }),
+    },
+    select: { id: true },
+  });
+  if (!check) return false;
+
+  await db.dayCheckReply.create({
+    data: { dayCheckId, authorId: viewer.id, body: text.slice(0, 2000) },
+  });
+  return true;
 }

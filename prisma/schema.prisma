@@ -28,6 +28,7 @@ model Organisation {
   comments    Comment[]
   attachments Attachment[]
   signIns     SignIn[]
+  dayChecks   DayCheck[]
 }
 
 model User {
@@ -44,23 +45,26 @@ model User {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  organisation       Organisation   @relation(fields: [organisationId], references: [id])
-  manager            User?          @relation("ManagerReports", fields: [managerId], references: [id])
-  reports            User[]         @relation("ManagerReports")
-  assignedTemplates  TaskTemplate[] @relation("TemplateAssignee")
-  createdTemplates   TaskTemplate[] @relation("TemplateCreator")
-  assignedInstances  TaskInstance[] @relation("InstanceAssignee")
-  completedInstances TaskInstance[] @relation("InstanceCompleter")
+  organisation       Organisation    @relation(fields: [organisationId], references: [id])
+  manager            User?           @relation("ManagerReports", fields: [managerId], references: [id])
+  reports            User[]          @relation("ManagerReports")
+  assignedTemplates  TaskTemplate[]  @relation("TemplateAssignee")
+  createdTemplates   TaskTemplate[]  @relation("TemplateCreator")
+  assignedInstances  TaskInstance[]  @relation("InstanceAssignee")
+  completedInstances TaskInstance[]  @relation("InstanceCompleter")
   auditLogs          AuditLog[]
   comments           Comment[]
   attachments        Attachment[]
-  absences           Absence[]      @relation("AbsenceUser")
-  covering           Absence[]      @relation("AbsenceCover")
-  coveringTasks      AbsenceCover[] @relation("AbsenceCoverPerTask")
-  bookedAbsences     Absence[]      @relation("AbsenceCreator")
+  absences           Absence[]       @relation("AbsenceUser")
+  covering           Absence[]       @relation("AbsenceCover")
+  coveringTasks      AbsenceCover[]  @relation("AbsenceCoverPerTask")
+  bookedAbsences     Absence[]       @relation("AbsenceCreator")
   signIns            SignIn[]
   commentReads       CommentRead[]
   activity           DailyActivity[]
+  dayChecks          DayCheck[]
+  dayCheckReplies    DayCheckReply[]
+  dayCheckReads      DayCheckRead[]
   /**
    * The last time they loaded a page, not the last time they signed in. The
    * session cookie lasts a month, so a sign-in says when somebody first typed
@@ -162,11 +166,11 @@ model TaskInstance {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
-  organisation Organisation @relation(fields: [organisationId], references: [id])
-  template     TaskTemplate @relation(fields: [templateId], references: [id])
-  assignee     User         @relation("InstanceAssignee", fields: [assigneeId], references: [id])
-  completedBy  User?        @relation("InstanceCompleter", fields: [completedById], references: [id])
-  category     Category?    @relation(fields: [categoryId], references: [id])
+  organisation Organisation  @relation(fields: [organisationId], references: [id])
+  template     TaskTemplate  @relation(fields: [templateId], references: [id])
+  assignee     User          @relation("InstanceAssignee", fields: [assigneeId], references: [id])
+  completedBy  User?         @relation("InstanceCompleter", fields: [completedById], references: [id])
+  category     Category?     @relation(fields: [categoryId], references: [id])
   auditLogs    AuditLog[]
   comments     Comment[]
   reads        CommentRead[]
@@ -224,7 +228,6 @@ model Settings {
 /// belongs to Tuesday.
 /**
  * How far somebody has read one task's thread.
- *
  * One row per person per thread rather than a single "messages last opened"
  * stamp on the user: with one stamp, opening the list to read one reply marks
  * every other thread read too, and an unread count that lies once is one
@@ -244,7 +247,6 @@ model CommentRead {
 
 /**
  * One row per person per day they used it.
- *
  * Rolled up rather than a row per page load: the question is "are they opening
  * this", which a day answers and a hundred rows of page views answers worse
  * and forever. `visits` counts active spells rather than requests — it is
@@ -394,4 +396,60 @@ model SignIn {
 
   @@index([organisationId, at])
   @@index([userId, at])
+}
+
+/**
+ * Why a day came in under half.
+ * Its own table rather than a comment on a task, because it is about the day
+ * and not about any one job on it. Attaching it to the five tasks that were
+ * missed would be five copies of one sentence, and attaching it to any one of
+ * them would be a lie about which one it was written for.
+ * The numbers are stored beside the answer, not recomputed from the tasks
+ * later. A reason read six weeks on has to sit next to the day it was actually
+ * written about, and by then the catch-up sweep, an edited task or somebody
+ * marking work done late will all have moved the underlying figures.
+ */
+model DayCheck {
+  id             String   @id @default(cuid())
+  organisationId String
+  userId         String
+  day            DateTime @db.Date
+  completed      Int
+  total          Int
+  reason         String
+  createdAt      DateTime @default(now())
+
+  organisation Organisation    @relation(fields: [organisationId], references: [id])
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replies      DayCheckReply[]
+  reads        DayCheckRead[]
+
+  // Asked once a day, so the answer is the day's.
+  @@unique([userId, day])
+  @@index([organisationId, day])
+}
+
+model DayCheckReply {
+  id         String   @id @default(cuid())
+  dayCheckId String
+  authorId   String
+  body       String
+  createdAt  DateTime @default(now())
+
+  dayCheck DayCheck @relation(fields: [dayCheckId], references: [id], onDelete: Cascade)
+  author   User     @relation(fields: [authorId], references: [id])
+
+  @@index([dayCheckId, createdAt])
+}
+
+model DayCheckRead {
+  userId     String
+  dayCheckId String
+  readAt     DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dayCheck DayCheck @relation(fields: [dayCheckId], references: [id], onDelete: Cascade)
+
+  @@id([userId, dayCheckId])
+  @@index([userId])
 }

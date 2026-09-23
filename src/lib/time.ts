@@ -297,6 +297,16 @@ export function formatDateOnly(
   return opts?.withYear ? `${label} ${y}` : label;
 }
 
+/**
+ * "Thursday 28 August" — the long form without the year.
+ *
+ * For a date close enough to today that the year is noise: yesterday does not
+ * need telling which yesterday it was.
+ */
+export function formatDateOnlyFull(value: DateOnly | Date): string {
+  return formatDateOnlyLong(value).replace(/ \d{4}$/, "");
+}
+
 /** "Thursday 28 August 2026" — used in the /my-day header. */
 export function formatDateOnlyLong(value: DateOnly | Date): string {
   const date = toDateOnly(value);

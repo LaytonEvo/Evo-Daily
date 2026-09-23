@@ -5,6 +5,8 @@ import { ensureInstancesForToday, getMyDay } from "@/lib/my-day";
 import { AppShell } from "@/components/app-shell";
 import { storageEnabled } from "@/lib/storage";
 import { MyDayScreen } from "./my-day-screen";
+import { DayCheck } from "./day-check";
+import { pendingDayCheck } from "@/lib/day-check";
 
 export const metadata = { title: "My day · EvoTasks" };
 export const dynamic = "force-dynamic";
@@ -24,6 +26,10 @@ export default async function MyDayPage({
   await ensureInstancesForToday(prisma, user.organisationId);
   const day = await getMyDay(prisma, user);
 
+  // Only here, on the screen everybody lands on. A dialog that follows you
+  // onto Messages is a punishment, and the question is not one.
+  const owed = await pendingDayCheck(prisma, user);
+
   return (
     <AppShell user={user}>
       <MyDayScreen
@@ -32,6 +38,14 @@ export default async function MyDayPage({
         notice={denied === "admin" ? "That area is for admins only." : null}
         attachmentsEnabled={storageEnabled()}
       />
+      {owed ? (
+        <DayCheck
+          day={owed.dayLabel}
+          completed={owed.completed}
+          total={owed.total}
+          missed={owed.missed}
+        />
+      ) : null}
     </AppShell>
   );
 }
