@@ -19,7 +19,12 @@ import {
   type Fixture,
 } from "./helpers/db";
 import { generateInstances } from "@/lib/recurrence";
-import { markThreadRead, threadsFor, unreadCountFor } from "@/lib/messages";
+import {
+  markThreadRead,
+  threadsFor,
+  threadsForMember,
+  unreadCountFor,
+} from "@/lib/messages";
 import { addDays } from "@/lib/time";
 
 const available = await databaseAvailable();
@@ -173,5 +178,71 @@ describeDb("message threads", () => {
       data: { status: InstanceStatus.COMPLETED, completedAt: new Date() },
     });
     expect(await threadsFor(prisma, brad())).toEqual([]);
+  });
+});
+
+describeDb("an admin looking at somebody's messages", () => {
+  let fixture: Fixture;
+  let bradsTask: string;
+
+  const brad = () => ({ id: fixture.memberId, organisationId: fixture.orgId, role: Role.MEMBER });
+  const admin = () => ({ id: fixture.adminId, organisationId: fixture.orgId, role: Role.ADMIN });
+
+  beforeEach(async () => {
+    fixture = await seedFixture({ graceDays: 1 });
+    const template = await createTemplate(fixture, {
+      title: "Check the simulator bays",
+      startDate: addDays(TODAY, -20),
+      assigneeId: fixture.memberId,
+      daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+    });
+    await generateInstances(prisma, addDays(TODAY, -20), TODAY);
+    bradsTask = (await instancesFor(template.id))[0].id;
+    await prisma.comment.create({
+      data: {
+        organisationId: fixture.orgId,
+        instanceId: bradsTask,
+        authorId: fixture.adminId,
+        body: "Did bay 3 come back up?",
+      },
+    });
+  });
+
+  it("answers the question that brings anybody here: has he seen it", async () => {
+    const viewed = await threadsForMember(prisma, admin(), fixture.memberId);
+
+    expect(viewed!.person.name).toBe("Alex Member");
+    // Unread by Brad, not by the admin who wrote it.
+    expect(viewed!.threads[0].unread).toBe(1);
+
+    await markThreadRead(prisma, brad(), bradsTask);
+    const after = await threadsForMember(prisma, admin(), fixture.memberId);
+    expect(after!.threads[0].unread).toBe(0);
+  });
+
+  it("writes nothing — looking is not reading", async () => {
+    await threadsForMember(prisma, admin(), fixture.memberId);
+    // Neither the member's marker, which would be a lie about their reading,
+    // nor the admin's, which would silently clear their own badge.
+    expect(await prisma.commentRead.count()).toBe(0);
+  });
+
+  it("refuses a member, and an id from another organisation", async () => {
+    expect(await threadsForMember(prisma, brad(), fixture.adminId)).toBeNull();
+
+    const elsewhere = await prisma.organisation.create({
+      data: { name: "Somebody Else Ltd", timezone: "Europe/London" },
+    });
+    const outsider = await prisma.user.create({
+      data: {
+        organisationId: elsewhere.id,
+        email: "outsider@elsewhere.local",
+        name: "Outsider",
+        passwordHash: "x",
+        mustChangePassword: false,
+      },
+    });
+    expect(await threadsForMember(prisma, admin(), outsider.id)).toBeNull();
+    expect(await threadsForMember(prisma, admin(), "no-such-user")).toBeNull();
   });
 });

@@ -40,13 +40,24 @@ export type ThreadRow = {
 export function MessagesScreen({
   threads,
   attachmentsEnabled,
+  readOnly = false,
+  unreadBy,
 }: {
   threads: ThreadRow[];
   attachmentsEnabled: boolean;
+  /**
+   * Somebody else's inbox, being looked at. No composer, and — the part that
+   * matters — no marking anything read. These are not the reader's threads,
+   * and quietly clearing their own badge from a screen they are only watching
+   * is a count that lies.
+   */
+  readOnly?: boolean;
+  /** Whose unread this is, when it is not the reader's own. */
+  unreadBy?: string;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState<string | null>(
-    () => threads.find((t) => t.unread > 0)?.instanceId ?? null,
+  const [open, setOpen] = useState<string | null>(() =>
+    readOnly ? null : (threads.find((t) => t.unread > 0)?.instanceId ?? null),
   );
   const [read, setRead] = useState<Set<string>>(new Set());
 
@@ -59,7 +70,7 @@ export function MessagesScreen({
    * catches both routes in one place.
    */
   useEffect(() => {
-    if (!open) return;
+    if (readOnly || !open) return;
     const thread = threads.find((t) => t.instanceId === open);
     if (!thread || thread.unread === 0 || read.has(open)) return;
 
@@ -71,7 +82,7 @@ export function MessagesScreen({
         router.refresh();
       })
       .catch(() => undefined);
-  }, [open, threads, read, router]);
+  }, [open, threads, read, router, readOnly]);
 
   function toggle(thread: ThreadRow) {
     setOpen(open === thread.instanceId ? null : thread.instanceId);
@@ -84,7 +95,9 @@ export function MessagesScreen({
           <MessageSquare className="mx-auto h-6 w-6 text-muted-foreground" />
           <p className="mt-2 text-sm font-medium">No messages yet.</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Anything written on one of your tasks turns up here, however long ago it was due.
+            {readOnly
+              ? "Nothing has been written on their tasks yet."
+              : "Anything written on one of your tasks turns up here, however long ago it was due."}
           </p>
         </div>
       </main>
@@ -94,7 +107,9 @@ export function MessagesScreen({
   return (
     <main className="mx-auto w-full max-w-2xl pb-16 pt-2 safe-bottom">
       <p className="mb-4 text-sm text-muted-foreground">
-        Every task you own or have written on. Replies land here whatever day the task was for.
+        {readOnly
+          ? `Every conversation on ${unreadBy ? `${unreadBy}'s` : "their"} tasks, as they see it. Reply from the task itself or from your own Messages — a comment written here would be from you, not them, and this screen is for reading.`
+          : "Every task you own or have written on. Replies land here whatever day the task was for."}
       </p>
 
       <div className="flex flex-col gap-2">
@@ -131,7 +146,11 @@ export function MessagesScreen({
                   {last ? (
                     <p className="mt-0.5 truncate text-sm text-muted-foreground">
                       <span className="font-medium">
-                        {last.mine ? "You" : last.authorName.split(" ")[0]}:
+                        {/* "You" is only true when these are your own
+                            threads. On somebody else's inbox the reader is not
+                            the person `mine` refers to, so everyone gets a
+                            name. */}
+                        {last.mine && !readOnly ? "You" : last.authorName.split(" ")[0]}:
                       </span>{" "}
                       {last.body}
                     </p>
@@ -139,7 +158,11 @@ export function MessagesScreen({
                 </div>
 
                 <span className="flex shrink-0 items-center gap-2">
-                  {unread > 0 ? <Badge>{unread} new</Badge> : null}
+                  {unread > 0 ? (
+                    <Badge>
+                      {unread} {readOnly ? `unread by ${unreadBy ?? "them"}` : "new"}
+                    </Badge>
+                  ) : null}
                   <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                     <MessageSquare className="h-3.5 w-3.5" />
                     {thread.comments.length}
@@ -161,6 +184,7 @@ export function MessagesScreen({
                   <CommentThread
                     instanceId={thread.instanceId}
                     attachmentsEnabled={attachmentsEnabled}
+                    readOnly={readOnly}
                   />
                 </div>
               ) : null}

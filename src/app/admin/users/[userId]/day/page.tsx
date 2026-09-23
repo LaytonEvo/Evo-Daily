@@ -8,9 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { getDayFor } from "@/lib/my-day";
 import { generateInstances } from "@/lib/recurrence";
 import { storageEnabled } from "@/lib/storage";
-import { addDays, formatDateOnlyLong, isDateOnly, todayInLondon } from "@/lib/time";
-import { cn } from "@/lib/utils";
+import { formatDateOnlyLong, isDateOnly, todayInLondon } from "@/lib/time";
 import { MyDayScreen } from "@/app/my-day/my-day-screen";
+import { ViewAsTabs } from "./view-as-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +51,6 @@ export default async function ViewDayPage({
   if (!viewed) notFound();
 
   const { person, day, isToday, on: showing } = viewed;
-  const tomorrow = addDays(today, 1);
 
   return (
     <AppShell user={admin} active="users" title="People">
@@ -81,12 +80,7 @@ export default async function ViewDayPage({
         </div>
 
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <DayTab href={`/admin/users/${person.id}/day`} active={isToday} label="Today" />
-          <DayTab
-            href={`/admin/users/${person.id}/day?on=${tomorrow}`}
-            active={!isToday}
-            label="Tomorrow"
-          />
+          <ViewAsTabs userId={person.id} current={isToday ? "today" : "tomorrow"} />
           {!isToday ? (
             // The date being shown, not tomorrow's: the page takes any future
             // date in ?on=, and a note naming a different day to the list under
@@ -111,19 +105,3 @@ export default async function ViewDayPage({
   );
 }
 
-function DayTab({ href, active, label }: { href: string; active: boolean; label: string }) {
-  return (
-    <Link
-      href={href}
-      aria-current={active ? "page" : undefined}
-      className={cn(
-        "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
-        active
-          ? "border-primary bg-primary text-primary-foreground"
-          : "border-input bg-card hover:bg-accent",
-      )}
-    >
-      {label}
-    </Link>
-  );
-}

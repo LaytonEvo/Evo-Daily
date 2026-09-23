@@ -169,3 +169,47 @@ export async function markThreadRead(
   });
   return true;
 }
+
+export type ViewedThreads = {
+  person: { id: string; name: string; isActive: boolean };
+  threads: Thread[];
+};
+
+/**
+ * One person's threads, for an admin looking over their shoulder.
+ *
+ * The same two rules as viewing their day — admins only, same organisation,
+ * null for both so a refusal and a missing id are indistinguishable. The id
+ * comes from a URL and is not to be trusted.
+ *
+ * `unread` here means unread *by them*, which is the answer to the question
+ * that brings anybody to this screen: I replied last night, has he seen it?
+ * Nothing on this path writes a read marker — for the member, because it is
+ * not their reading, or for the admin, because they are not in the thread and
+ * silently clearing their own badge from a screen they are only watching is a
+ * count that lies.
+ */
+export async function threadsForMember(
+  db: PrismaClient,
+  actor: Viewer,
+  userId: string,
+): Promise<ViewedThreads | null> {
+  if (actor.role !== Role.ADMIN) return null;
+
+  const person = await db.user.findFirst({
+    where: { id: userId, organisationId: actor.organisationId },
+    select: { id: true, name: true, isActive: true, role: true, organisationId: true },
+  });
+  if (!person) return null;
+
+  const threads = await threadsFor(db, {
+    id: person.id,
+    organisationId: person.organisationId,
+    role: person.role,
+  });
+
+  return {
+    person: { id: person.id, name: person.name, isActive: person.isActive },
+    threads,
+  };
+}
