@@ -31,6 +31,15 @@ const describeDb = available ? describe : describe.skip;
 
 const TODAY = "2026-09-23"; // Wednesday
 
+/**
+ * Mid-morning on a fixed day.
+ *
+ * Never `new Date()`: these tests pin TODAY, and a completion stamped with the
+ * real clock is "today" only while the calendar agrees with the constant. Two
+ * of them passed for a day and failed at midnight.
+ */
+const at = (day: string) => new Date(`${day}T10:00:00Z`);
+
 describe("leadDaysFor", () => {
   it("falls back to something sensible per frequency", () => {
     expect(leadDaysFor({ frequency: Frequency.DAILY, leadDays: null })).toBe(0);
@@ -144,7 +153,7 @@ describeDb("coming up", () => {
     const [instance] = await instancesFor(template.id);
     await prisma.taskInstance.update({
       where: { id: instance.id },
-      data: { status: InstanceStatus.COMPLETED, completedAt: new Date() },
+      data: { status: InstanceStatus.COMPLETED, completedAt: at(TODAY) },
     });
 
     expect(await getComingUp(prisma, who(), TODAY)).toEqual([]);
@@ -159,7 +168,7 @@ describeDb("coming up", () => {
     const [instance] = await instancesFor(template.id);
     await prisma.taskInstance.update({
       where: { id: instance.id },
-      data: { status: InstanceStatus.COMPLETED, completedAt: new Date() },
+      data: { status: InstanceStatus.COMPLETED, completedAt: at(TODAY) },
     });
 
     const day = await getMyDay(prisma, who(), TODAY);
@@ -184,7 +193,7 @@ describeDb("coming up", () => {
     const [instance] = await instancesFor(ahead.id);
     await prisma.taskInstance.update({
       where: { id: instance.id },
-      data: { status: InstanceStatus.COMPLETED, completedAt: new Date() },
+      data: { status: InstanceStatus.COMPLETED, completedAt: at(TODAY) },
     });
 
     const after = await getMyDay(prisma, who(), TODAY);

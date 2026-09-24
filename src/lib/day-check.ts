@@ -31,7 +31,7 @@ export type DayCheckPrompt = {
   missed: string[];
 };
 
-type Person = { id: string; organisationId: string };
+type Person = { id: string; organisationId: string; role: Role };
 
 /**
  * Whether this person owes an answer for yesterday, and what to ask about.
@@ -51,6 +51,12 @@ export async function pendingDayCheck(
   person: Person,
   today: DateOnly = todayInLondon(),
 ): Promise<DayCheckPrompt | null> {
+  // Admins are not asked. The answer is addressed to the admins, so asking one
+  // is asking them to write to themselves, and a manager who has learnt to
+  // click through their own dialog every morning has learnt to click through
+  // everybody's.
+  if (person.role === Role.ADMIN) return null;
+
   const day = addDays(today, -1);
 
   const already = await db.dayCheck.findUnique({

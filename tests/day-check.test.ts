@@ -63,7 +63,11 @@ describeDb("the under-half day check", () => {
     }
   }
 
-  const member = () => ({ id: fixture.memberId, organisationId: fixture.orgId });
+  const member = () => ({
+    id: fixture.memberId,
+    organisationId: fixture.orgId,
+    role: Role.MEMBER,
+  });
   const ask = () => pendingDayCheck(prisma, member(), TODAY);
 
   const DONE = InstanceStatus.COMPLETED;
@@ -132,6 +136,21 @@ describeDb("the under-half day check", () => {
   it("asks about yesterday and not about today", async () => {
     await dayOf([OPEN, OPEN], { on: TODAY });
     expect(await ask()).toBeNull();
+  });
+
+  /**
+   * The answer goes to the admins, so asking an admin is asking them to write
+   * to themselves — and a manager in the habit of clicking through their own
+   * dialog is a manager in the habit of clicking through everybody's.
+   */
+  it("never asks an admin, whose own bad day has nobody to report to", async () => {
+    await dayOf([OPEN, OPEN, OPEN, OPEN], { who: fixture.adminId });
+
+    const admin = { id: fixture.adminId, organisationId: fixture.orgId, role: Role.ADMIN };
+    expect(await pendingDayCheck(prisma, admin, TODAY)).toBeNull();
+    expect((await saveDayCheck(prisma, admin, "Swamped with cover all day.", TODAY)).ok).toBe(
+      false,
+    );
   });
 
   it("counts only this person's tasks", async () => {
