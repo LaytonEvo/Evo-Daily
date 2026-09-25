@@ -280,7 +280,10 @@ function FragmentRow({
             ? `${formatDateOnly(completed.toISOString().slice(0, 10))} ${formatTimeLondon(completed)}`
             : "—"}
         </td>
-        <td className="hidden max-w-[220px] truncate px-2 py-2.5 text-muted-foreground md:table-cell md:px-3">
+        <td
+          title={row.note ?? undefined}
+          className="hidden max-w-[220px] truncate px-2 py-2.5 text-muted-foreground md:table-cell md:px-3"
+        >
           {row.note ?? ""}
         </td>
         <td className="px-2 py-2.5 text-right sm:px-3">
@@ -310,11 +313,30 @@ function FragmentRow({
       {expanded ? (
         <tr className="border-b bg-accent/20 last:border-0">
           <td colSpan={showDue ? 6 : 5} className="px-3 pb-4 pt-0 sm:px-4">
+            {row.note ? <FullNote note={row.note} /> : null}
             <CommentThread instanceId={row.id} attachmentsEnabled={attachmentsEnabled} />
           </td>
         </tr>
       ) : null}
     </>
+  );
+}
+
+/**
+ * What somebody wrote when they ticked the task off, or wrote it off.
+ *
+ * The cell in the row above is one truncated line, because a table of a
+ * month's work has to stay scannable. That left the rest of the sentence
+ * nowhere to go on a desktop screen: the phone layout printed the note in
+ * full, the table clipped it at 220 pixels, and opening the row showed the
+ * comments and not the note. People were writing paragraphs nobody could read.
+ */
+function FullNote({ note }: { note: string }) {
+  return (
+    <div className="pt-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Note</p>
+      <p className="mt-0.5 whitespace-pre-wrap text-sm leading-snug">{note}</p>
+    </div>
   );
 }
 
