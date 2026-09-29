@@ -103,11 +103,11 @@ describe("buildWindow", () => {
 describe("totalsOf", () => {
   it("implements the metric definitions exactly", () => {
     const totals = totalsOf([
-      { status: InstanceStatus.COMPLETED, wasLate: false },
-      { status: InstanceStatus.COMPLETED, wasLate: false },
-      { status: InstanceStatus.COMPLETED, wasLate: true },
-      { status: InstanceStatus.MISSED, wasLate: false },
-      { status: InstanceStatus.PENDING, wasLate: false },
+      { status: InstanceStatus.COMPLETED, wasLate: false, lateApprovedAt: null },
+      { status: InstanceStatus.COMPLETED, wasLate: false, lateApprovedAt: null },
+      { status: InstanceStatus.COMPLETED, wasLate: true, lateApprovedAt: null },
+      { status: InstanceStatus.MISSED, wasLate: false, lateApprovedAt: null },
+      { status: InstanceStatus.PENDING, wasLate: false, lateApprovedAt: null },
     ]);
 
     expect(totals).toMatchObject({
@@ -122,7 +122,7 @@ describe("totalsOf", () => {
   });
 
   it("returns a null on-time rate when nothing was completed", () => {
-    const totals = totalsOf([{ status: InstanceStatus.MISSED, wasLate: false }]);
+    const totals = totalsOf([{ status: InstanceStatus.MISSED, wasLate: false, lateApprovedAt: null }]);
     expect(totals.onTimeRate).toBeNull();
     expect(totals.completionRate).toBe(0);
   });

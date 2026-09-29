@@ -172,6 +172,50 @@ export async function completeInstance(
   });
 }
 
+/**
+ * Accept a late completion, or take that acceptance back.
+ *
+ * The common case behind a "Completed late" badge is work that happened on
+ * time and got ticked off afterwards — somebody finishing the range at five
+ * and remembering the app at seven. That is a fact about the tick, not about
+ * the work, and an on-time rate that cannot tell the two apart is a number
+ * people learn to argue with rather than act on.
+ *
+ * wasLate is never cleared. What happened still happened; the approval sits
+ * beside it and says an admin looked. Anything else would be a record that
+ * edits itself whenever somebody objects to it.
+ *
+ * No audit row: AuditLog is a log of status transitions and this is not one.
+ * Who approved and when are on the instance itself, which is the same fact in
+ * the place people will actually look for it.
+ */
+export async function approveLate(
+  db: DbClient,
+  instanceId: string,
+  actor: Actor,
+  options: { approved?: boolean; now?: Date } = {},
+) {
+  if (actor.role !== Role.ADMIN) {
+    throw new TransitionError("Only an admin can approve a late completion", 403);
+  }
+
+  const instance = await loadInstanceFor(db, instanceId, actor);
+  const approved = options.approved ?? true;
+
+  // Nothing to approve on a task that was never late, and saying so beats
+  // silently writing an approval that no screen would ever show.
+  if (approved && !(instance.status === InstanceStatus.COMPLETED && instance.wasLate)) {
+    throw new TransitionError("That task was not completed late", 422);
+  }
+
+  return db.taskInstance.update({
+    where: { id: instance.id },
+    data: approved
+      ? { lateApprovedAt: options.now ?? new Date(), lateApprovedById: actor.id }
+      : { lateApprovedAt: null, lateApprovedById: null },
+  });
+}
+
 export async function uncompleteInstance(
   db: DbClient,
   instanceId: string,

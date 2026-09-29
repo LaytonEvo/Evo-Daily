@@ -52,6 +52,7 @@ model User {
   createdTemplates   TaskTemplate[]  @relation("TemplateCreator")
   assignedInstances  TaskInstance[]  @relation("InstanceAssignee")
   completedInstances TaskInstance[]  @relation("InstanceCompleter")
+  lateApprovals      TaskInstance[]  @relation("InstanceLateApprover")
   auditLogs          AuditLog[]
   comments           Comment[]
   attachments        Attachment[]
@@ -158,22 +159,33 @@ model TaskInstance {
   categoryId String?
   // ---
 
-  status        InstanceStatus @default(PENDING)
-  completedAt   DateTime?
-  completedById String?
-  wasLate       Boolean        @default(false)
-  note          String? // optional free-text on completion
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  status           InstanceStatus @default(PENDING)
+  completedAt      DateTime?
+  completedById    String?
+  wasLate          Boolean        @default(false)
+  /**
+   * An admin has looked at a late completion and accepted it.
+   * wasLate is never cleared by this: what happened still happened, and a
+   * record that edits itself when somebody objects is worth nothing. The
+   * approval sits beside it and is what the on-time rate reads, because the
+   * common case is work done on time and ticked off afterwards — which is a
+   * fact about the tick, not about the work.
+   */
+  lateApprovedAt   DateTime?
+  lateApprovedById String?
+  note             String? // optional free-text on completion
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
-  organisation Organisation  @relation(fields: [organisationId], references: [id])
-  template     TaskTemplate  @relation(fields: [templateId], references: [id])
-  assignee     User          @relation("InstanceAssignee", fields: [assigneeId], references: [id])
-  completedBy  User?         @relation("InstanceCompleter", fields: [completedById], references: [id])
-  category     Category?     @relation(fields: [categoryId], references: [id])
-  auditLogs    AuditLog[]
-  comments     Comment[]
-  reads        CommentRead[]
+  organisation   Organisation  @relation(fields: [organisationId], references: [id])
+  template       TaskTemplate  @relation(fields: [templateId], references: [id])
+  assignee       User          @relation("InstanceAssignee", fields: [assigneeId], references: [id])
+  completedBy    User?         @relation("InstanceCompleter", fields: [completedById], references: [id])
+  lateApprovedBy User?         @relation("InstanceLateApprover", fields: [lateApprovedById], references: [id])
+  category       Category?     @relation(fields: [categoryId], references: [id])
+  auditLogs      AuditLog[]
+  comments       Comment[]
+  reads          CommentRead[]
 
   @@unique([templateId, dueDate]) // idempotency guarantee — critical
   @@index([assigneeId, dueDate])

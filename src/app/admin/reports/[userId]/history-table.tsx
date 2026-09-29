@@ -6,6 +6,7 @@ import { ChevronDown, MessageSquare } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { CommentThread } from "@/app/my-day/comment-thread";
 import { NotDoneButton } from "./not-done-button";
+import { ApproveLateButton } from "./approve-late-button";
 import { cn } from "@/lib/utils";
 import { daysBetween, formatDateOnly, formatTimeLondon } from "@/lib/time";
 import { isOverdueRow, rollUpByWeek } from "@/lib/reports";
@@ -17,6 +18,8 @@ export type HistoryRow = {
   dueDate: string;
   status: InstanceStatus;
   wasLate: boolean;
+  lateApprovedAt: Date | string | null;
+  lateApprovedByName: string | null;
   completedAt: Date | string | null;
   note: string | null;
   commentCount: number;
@@ -60,10 +63,15 @@ export function HistoryTable({
 }) {
   const shown = rows.filter((r) => matchesFilter(r, filter));
 
+  // Keyed on the rows themselves, not on their ids. Keying on ids meant any
+  // change that did not add or remove a row was invisible: approving a late
+  // tick, writing one off, editing a note — the server sent the new data, the
+  // props updated, and the memo handed back the old grouping. `rows` is a prop
+  // and is referentially stable between refreshes, so this recomputes exactly
+  // when something has actually changed.
   const weeks = useMemo(
-    () => (today ? rollUpByWeek(shown, today) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [shown.map((r) => r.id).join(","), today],
+    () => (today ? rollUpByWeek(rows.filter((r) => matchesFilter(r, filter)), today) : []),
+    [rows, filter, today],
   );
 
   if (shown.length === 0) {
@@ -230,7 +238,8 @@ function HistoryCard({
               className={cn("h-4 w-4 transition-transform duration-150", expanded && "rotate-180")}
             />
           </button>
-          <span className="ml-auto">
+          <span className="ml-auto flex items-center gap-1">
+            <LateApproval row={row} />
             <NotDoneButton instanceId={row.id} title={row.title} status={row.status} />
           </span>
         </div>
@@ -288,6 +297,7 @@ function FragmentRow({
         </td>
         <td className="px-2 py-2.5 text-right sm:px-3">
           <div className="flex items-center justify-end gap-1">
+            <LateApproval row={row} />
             <NotDoneButton instanceId={row.id} title={row.title} status={row.status} />
             <button
               type="button"
@@ -340,12 +350,28 @@ function FullNote({ note }: { note: string }) {
   );
 }
 
+/** Nothing to approve unless the task was completed late. */
+function LateApproval({ row }: { row: HistoryRow }) {
+  if (!(row.status === InstanceStatus.COMPLETED && row.wasLate)) return null;
+  return (
+    <ApproveLateButton
+      instanceId={row.id}
+      title={row.title}
+      approvedAt={row.lateApprovedAt}
+      approvedByName={row.lateApprovedByName}
+    />
+  );
+}
+
 function StatusBadge({ row, today }: { row: HistoryRow; today?: string }) {
   if (row.status === InstanceStatus.COMPLETED) {
-    return row.wasLate ? (
-      <Badge variant="warning">Completed late</Badge>
+    if (!row.wasLate) return <Badge variant="success">Completed</Badge>;
+    // Still says late, because it was. The approval is what the on-time rate
+    // reads; the badge is the record of what happened.
+    return row.lateApprovedAt ? (
+      <Badge variant="success">Late · approved</Badge>
     ) : (
-      <Badge variant="success">Completed</Badge>
+      <Badge variant="warning">Completed late</Badge>
     );
   }
   if (row.status === InstanceStatus.MISSED) return <Badge variant="destructive">Missed</Badge>;

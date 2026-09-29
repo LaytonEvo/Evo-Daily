@@ -128,7 +128,7 @@ describeDb("time off", () => {
 
       const rows = await prisma.taskInstance.findMany({
         where: { assigneeId: fixture.memberId },
-        select: { status: true, wasLate: true },
+        select: { status: true, wasLate: true, lateApprovedAt: true },
       });
       const totals = totalsOf(rows);
 

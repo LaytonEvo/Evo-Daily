@@ -176,6 +176,7 @@ type InstanceRow = {
   dueDate: Date;
   status: InstanceStatus;
   wasLate: boolean;
+  lateApprovedAt: Date | null;
   title: string;
   assigneeId: string;
   categoryId: string | null;
@@ -203,6 +204,7 @@ async function loadInstances(
       dueDate: true,
       status: true,
       wasLate: true,
+      lateApprovedAt: true,
       title: true,
       assigneeId: true,
       categoryId: true,
@@ -211,7 +213,29 @@ async function loadInstances(
   });
 }
 
-export function totalsOf(instances: Pick<InstanceRow, "status" | "wasLate">[]): Totals {
+/**
+ * Late, and nobody has accepted it.
+ *
+ * An admin approving a late tick is saying the work was on time and the tick
+ * was not, so the on-time rate reads the approval rather than the raw flag.
+ * wasLate itself is left alone — the badge still says the task was completed
+ * late, because it was.
+ */
+export function countsAsLate(instance: {
+  wasLate: boolean;
+  /** A string once it has crossed to the client, a Date on the server. */
+  lateApprovedAt: Date | string | null;
+}): boolean {
+  return instance.wasLate && instance.lateApprovedAt === null;
+}
+
+export function totalsOf(
+  instances: {
+    status: InstanceStatus;
+    wasLate: boolean;
+    lateApprovedAt: Date | string | null;
+  }[],
+): Totals {
   let completed = 0;
   let missed = 0;
   let outstanding = 0;
@@ -221,7 +245,7 @@ export function totalsOf(instances: Pick<InstanceRow, "status" | "wasLate">[]): 
   for (const instance of instances) {
     if (instance.status === InstanceStatus.COMPLETED) {
       completed += 1;
-      if (!instance.wasLate) onTime += 1;
+      if (!countsAsLate(instance)) onTime += 1;
     } else if (instance.status === InstanceStatus.MISSED) {
       missed += 1;
     } else if (instance.status === InstanceStatus.EXCUSED) {
@@ -267,7 +291,9 @@ function groupBy<T, K extends string | null>(items: T[], key: (item: T) => K): M
  * weekend look like a bad day.
  */
 export function buildTrend(
-  instances: Pick<InstanceRow, "dueDate" | "status" | "wasLate">[],
+  instances: (Pick<InstanceRow, "dueDate" | "status" | "wasLate"> & {
+    lateApprovedAt: Date | string | null;
+  })[],
   window: Pick<ReportWindow, "from" | "to">,
 ): TrendPoint[] {
   const byDate = groupBy(instances, (i) => toDateOnly(i.dueDate));
@@ -461,6 +487,8 @@ export type PersonReport = {
     dueDate: DateOnly;
     status: InstanceStatus;
     wasLate: boolean;
+    lateApprovedAt: Date | null;
+    lateApprovedByName: string | null;
     completedAt: Date | null;
     note: string | null;
     categoryName: string | null;
@@ -492,6 +520,8 @@ export async function buildPersonReport(
       dueDate: true,
       status: true,
       wasLate: true,
+      lateApprovedAt: true,
+      lateApprovedBy: { select: { name: true } },
       completedAt: true,
       note: true,
       categoryId: true,
@@ -533,6 +563,8 @@ export async function buildPersonReport(
       dueDate: toDateOnly(r.dueDate),
       status: r.status,
       wasLate: r.wasLate,
+      lateApprovedAt: r.lateApprovedAt,
+      lateApprovedByName: r.lateApprovedBy?.name ?? null,
       completedAt: r.completedAt,
       note: r.note,
       categoryName: r.category?.name ?? null,
@@ -677,7 +709,12 @@ export type WeekGroup<T> = {
   days: DayGroup<T>[];
 };
 
-type Datedish = { dueDate: DateOnly; status: InstanceStatus; wasLate: boolean };
+type Datedish = {
+  dueDate: DateOnly;
+  status: InstanceStatus;
+  wasLate: boolean;
+  lateApprovedAt: Date | string | null;
+};
 
 /**
  * Instances folded into days, and days into weeks.

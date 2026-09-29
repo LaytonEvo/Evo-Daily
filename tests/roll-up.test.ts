@@ -18,6 +18,7 @@ const row = (dueDate: string, status: InstanceStatus, wasLate = false) => ({
   dueDate,
   status,
   wasLate,
+  lateApprovedAt: null,
 });
 const done = (d: string, late = false) => row(d, InstanceStatus.COMPLETED, late);
 const missed = (d: string) => row(d, InstanceStatus.MISSED);
