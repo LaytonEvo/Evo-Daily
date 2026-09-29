@@ -10,6 +10,7 @@ import { formatDateOnly } from "@/lib/time";
 import { singleDayLabel, type LeaderboardRow, type OrgReport } from "@/lib/reports";
 import { WindowPicker } from "./window-picker";
 import { TrendChart } from "./trend-chart";
+import { TaskRankingsPanel } from "./task-rankings";
 
 type SortKey = keyof Pick<
   LeaderboardRow,
@@ -118,6 +119,10 @@ export function ReportsScreen({ report, today }: { report: OrgReport; today: str
           </CardContent>
         </Card>
 
+        {/* Above Problem tasks: this answers "where is the hole" and that one
+            answers "which task is worst designed". The count question is the
+            one somebody arrives at the page with. */}
+        <TaskRankingsPanel rankings={report.rankings} />
         <ProblemTasks report={report} query={query} />
         <Categories report={report} query={query} />
 

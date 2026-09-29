@@ -45,6 +45,14 @@ export const LOW_VOLUME_THRESHOLD = 10;
 /** A template needs this many instances before its rate means anything. */
 export const PROBLEM_TASK_MIN_INSTANCES = 5;
 
+/**
+ * How many tasks each ranking shows.
+ *
+ * A ranking is a top-of-the-list question — "what keeps getting dropped" — and
+ * a list of ninety rows is the flat table it was supposed to replace.
+ */
+export const RANKING_SIZE = 10;
+
 export type ReportWindow = {
   from: DateOnly;
   /** Clipped to today: future instances appear in no denominator anywhere. */
@@ -94,6 +102,31 @@ export type ProblemTask = Totals & {
   isActive: boolean;
 };
 
+/** How many times one recurring task landed on one side of the ledger. */
+export type TaskTally = {
+  templateId: string;
+  title: string;
+  assigneeName: string;
+  categoryName: string | null;
+  /** Times missed, or times completed — whichever list this row is in. */
+  count: number;
+  /** Times it came due in the window, excused days excluded. */
+  assigned: number;
+  /** count / assigned, or null when nothing was due. */
+  share: number | null;
+  isActive: boolean;
+};
+
+export type TaskRankings = {
+  /** Most often missed first. */
+  missed: TaskTally[];
+  /** Most often completed first. */
+  completed: TaskTally[];
+  /** How many distinct tasks had at least one, before the list was cut. */
+  missedTasks: number;
+  completedTasks: number;
+};
+
 export type CategoryRow = Totals & {
   categoryId: string | null;
   name: string;
@@ -116,6 +149,7 @@ export type OrgReport = {
   /** The same series per person, keyed by user id. Empty for anyone with no instances. */
   trendByUser: Record<string, TrendPoint[]>;
   problemTasks: ProblemTask[];
+  rankings: TaskRankings;
   categories: CategoryRow[];
 };
 
@@ -411,6 +445,57 @@ export async function buildOrgReport(
     })
     .sort((a, b) => (a.completionRate ?? 1) - (b.completionRate ?? 1) || b.assigned - a.assigned);
 
+  // --- What gets done, and what gets dropped -------------------------------
+  //
+  // Counts, not rates. "Problem tasks" above already answers which task has
+  // the worst rate, and the two questions have different answers: a daily job
+  // missed eleven times at 70% costs the business more than a monthly one
+  // missed twice at 0%, and only a count says so. The completed side has no
+  // equivalent anywhere else — it is the one view of what the team actually
+  // chooses to get done when the day is short.
+  const tallies: TaskTally[] = [...byTemplate.entries()].map(([templateId, rows]) => {
+    const template = templateById.get(templateId);
+    const { assigned } = totalsOf(rows);
+    return {
+      templateId,
+      // The instance snapshot is the honest title for the window, the same
+      // rule the rest of this file follows: a task renamed in October must
+      // not rewrite September.
+      title: rows[0]?.title ?? template?.title ?? "Removed task",
+      assigneeName: template?.assignee.name ?? "—",
+      categoryName: template?.categoryId
+        ? (categoryById.get(template.categoryId)?.name ?? null)
+        : null,
+      count: 0,
+      assigned,
+      share: null,
+      isActive: template?.isActive ?? false,
+    };
+  });
+
+  const rank = (status: InstanceStatus): TaskTally[] =>
+    tallies
+      .map((tally) => {
+        const rows = byTemplate.get(tally.templateId) ?? [];
+        const count = rows.filter((r) => r.status === status).length;
+        return { ...tally, count, share: tally.assigned === 0 ? null : count / tally.assigned };
+      })
+      .filter((tally) => tally.count > 0)
+      // Most often first; then the higher share, so between two tasks missed
+      // four times the one missed nearly every time it came due sits above the
+      // one that usually gets done.
+      .sort((a, b) => b.count - a.count || (b.share ?? 0) - (a.share ?? 0) || a.title.localeCompare(b.title));
+
+  const missedRanking = rank(InstanceStatus.MISSED);
+  const completedRanking = rank(InstanceStatus.COMPLETED);
+
+  const rankings: TaskRankings = {
+    missed: missedRanking.slice(0, RANKING_SIZE),
+    completed: completedRanking.slice(0, RANKING_SIZE),
+    missedTasks: missedRanking.length,
+    completedTasks: completedRanking.length,
+  };
+
   // --- By category ---------------------------------------------------------
   const byCategory = groupBy(instances, (i) => i.categoryId);
   const categoryRows: CategoryRow[] = [...byCategory.entries()]
@@ -440,6 +525,7 @@ export async function buildOrgReport(
     trend,
     trendByUser,
     problemTasks,
+    rankings,
     categories: categoryRows,
   };
 }
