@@ -111,6 +111,9 @@ export async function GET(request: Request) {
     const report = await buildOrgReport(prisma, admin.organisationId, window, {
       assigneeId: url.searchParams.get("rankBy") ?? undefined,
       categoryId: url.searchParams.get("rankCat") ?? undefined,
+      window: url.searchParams.get("rankDays")
+        ? buildWindow({ days: Number(url.searchParams.get("rankDays")) })
+        : undefined,
       limit: panel === "rankings" ? RANKING_ALL : undefined,
     });
 
@@ -197,7 +200,10 @@ export async function GET(request: Request) {
           (p) => p.id === report.rankings.filters.assigneeId,
         );
         const narrowed = who ? `_${slug(who.name)}` : "";
-        return csvResponse(csv, `evotasks_rankings${narrowed}_${stamp}.csv`);
+        // Its own span means its own dates in the name, or the file claims to
+        // cover days it does not.
+        const span = `${report.rankings.window.from}_to_${report.rankings.window.to}`;
+        return csvResponse(csv, `evotasks_rankings${narrowed}_${span}.csv`);
       }
 
       case "categories": {

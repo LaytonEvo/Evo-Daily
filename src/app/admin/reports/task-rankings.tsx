@@ -5,6 +5,7 @@ import { CheckCircle2, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { RANKING_SIZE, type RankingOption, type TaskTally, type TaskRankings } from "@/lib/reports";
+import { formatDateOnly } from "@/lib/time";
 import { formatRate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { ExportLink } from "./reports-screen";
@@ -37,6 +38,7 @@ export function TaskRankingsPanel({
     query,
     rankings.filters.assigneeId ? `rankBy=${rankings.filters.assigneeId}` : "",
     rankings.filters.categoryId ? `rankCat=${rankings.filters.categoryId}` : "",
+    rankings.followsPage ? "" : `rankDays=${rankings.window.days}`,
   ]
     .filter(Boolean)
     .join("&");
@@ -53,7 +55,22 @@ export function TaskRankingsPanel({
           task, not just the ones listed here.
         </CardDescription>
 
+        {rankings.followsPage ? null : (
+          <p className="mt-2 text-xs font-medium text-warning">
+            These two lists cover {rankings.window.label.toLowerCase()} (
+            {formatDateOnly(rankings.window.from)} – {formatDateOnly(rankings.window.to)}), not the
+            range the rest of the page is showing.
+          </p>
+        )}
+
         <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Narrow
+            param="rankDays"
+            label="Range"
+            allLabel="Same as page"
+            options={RANGE_OPTIONS}
+            value={rankings.followsPage ? "" : String(rankings.window.days)}
+          />
           <Narrow
             param="rankBy"
             label="Person"
@@ -110,6 +127,20 @@ export function TaskRankingsPanel({
  * Only the rankings narrow. The tiles and the leaderboard above keep showing
  * the whole team, so the page never half-agrees with itself.
  */
+/**
+ * Spans the panel can be read over on its own.
+ *
+ * Presets only, and no custom range: the page picker above already does dates
+ * properly, and this exists because that control is off the top of the screen
+ * by the time you are reading these lists — not because it needs replacing.
+ */
+const RANGE_OPTIONS: RankingOption[] = [
+  { id: "7", name: "Last 7 days" },
+  { id: "30", name: "Last 30 days" },
+  { id: "90", name: "Last 90 days" },
+  { id: "365", name: "Last year" },
+];
+
 function Narrow({
   param,
   label,

@@ -183,6 +183,81 @@ describeDb("task rankings", () => {
     expect(row.assigneeName).toBe("2 people");
   });
 
+  // --- A span of its own --------------------------------------------------
+
+  it("follows the page when no span of its own is asked for", async () => {
+    await task("Recent", [GONE]);
+
+    const { rankings } = await report();
+    expect(rankings.followsPage).toBe(true);
+    expect(rankings.window.days).toBe(30);
+  });
+
+  /**
+   * The point of the control: read these two lists over a longer run than the
+   * tiles, without moving the rest of the page.
+   */
+  it("counts over its own span when given one", async () => {
+    const oldId = await task("Only in the long window", [GONE]);
+    await prisma.taskInstance.updateMany({
+      where: { templateId: oldId },
+      data: { dueDate: toDbDate(addDays(TODAY, -60)) },
+    });
+    await task("Recent", [GONE]);
+
+    const short = await report();
+    expect(short.rankings.missed.map((r) => r.title)).toEqual(["Recent"]);
+
+    const long = await report({ window: buildWindow({ days: 90 }, TODAY) });
+    expect(long.rankings.missed.map((r) => r.title).sort()).toEqual([
+      "Only in the long window",
+      "Recent",
+    ]);
+    expect(long.rankings.followsPage).toBe(false);
+  });
+
+  it("leaves the rest of the page on the page's own range", async () => {
+    const oldId = await task("Long ago", [GONE]);
+    await prisma.taskInstance.updateMany({
+      where: { templateId: oldId },
+      data: { dueDate: toDbDate(addDays(TODAY, -60)) },
+    });
+    await task("Recent", [GONE]);
+
+    const page = await report();
+    const widened = await report({ window: buildWindow({ days: 90 }, TODAY) });
+
+    expect(widened.totals).toEqual(page.totals);
+    expect(widened.window.days).toBe(30);
+    expect(widened.rankings.window.days).toBe(90);
+  });
+
+  /**
+   * Asking for the span the page is already on is not a different span, and
+   * saying it is would put a warning on the screen for no reason.
+   */
+  it("knows an explicit span that matches the page is still the page's", async () => {
+    await task("Recent", [GONE]);
+
+    const { rankings } = await report({ window: buildWindow({ days: 30 }, TODAY) });
+    expect(rankings.followsPage).toBe(true);
+  });
+
+  it("offers the people its own span saw, not the page's", async () => {
+    const oldId = await task("Theirs, long ago", [GONE], fixture.otherMemberId);
+    await prisma.taskInstance.updateMany({
+      where: { templateId: oldId },
+      data: { dueDate: toDbDate(addDays(TODAY, -60)) },
+    });
+    await task("Mine, recent", [GONE]);
+
+    const short = await report();
+    expect(short.rankings.people.map((p) => p.id)).toEqual([fixture.memberId]);
+
+    const long = await report({ window: buildWindow({ days: 90 }, TODAY) });
+    expect(long.rankings.people).toHaveLength(2);
+  });
+
   it("does not reach into another organisation", async () => {
     await task("Ours", [GONE]);
     const other = await prisma.organisation.create({

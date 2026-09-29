@@ -18,6 +18,8 @@ export default async function ReportsPage({
     /** Narrow the rankings panel only. */
     rankBy?: string;
     rankCat?: string;
+    /** A span for the rankings panel alone. Absent, it follows the page. */
+    rankDays?: string;
   }>;
 }) {
   const admin = await requireAdminPage();
@@ -33,6 +35,7 @@ export default async function ReportsPage({
   const report = await buildOrgReport(prisma, admin.organisationId, window, {
     assigneeId: params.rankBy,
     categoryId: params.rankCat,
+    window: params.rankDays ? buildWindow({ days: Number(params.rankDays) }, today) : undefined,
   });
 
   return (

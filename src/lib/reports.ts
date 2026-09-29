@@ -122,8 +122,16 @@ export type RankingOption = { id: string; name: string };
 
 export type RankingFilters = { assigneeId?: string; categoryId?: string };
 
-/** A ranking request: what to narrow to, and how much of it to return. */
-export type RankingQuery = RankingFilters & { limit?: number };
+/** A ranking request: what to narrow to, over what span, and how much to return. */
+export type RankingQuery = RankingFilters & {
+  limit?: number;
+  /**
+   * A span of its own. Omitted, the rankings follow the page, which is the
+   * only default that cannot surprise anybody: the numbers beside the tiles
+   * are then about the same days the tiles are.
+   */
+  window?: ReportWindow;
+};
 
 /** Ask for the whole ranking rather than the screen's top handful. */
 export const RANKING_ALL = Number.MAX_SAFE_INTEGER;
@@ -145,6 +153,13 @@ export type TaskRankings = {
   categoriesAvailable: RankingOption[];
   /** Echoed back so the controls can show what is in force after a reload. */
   filters: RankingFilters;
+  /**
+   * The span these counts actually cover, and whether it is the page's.
+   * Named on the screen whenever it is not, because a panel quietly counting
+   * different days to the tiles above it is the worst kind of wrong number.
+   */
+  window: ReportWindow;
+  followsPage: boolean;
 };
 
 /** The id used for tasks with no category, since a filter needs a value. */
@@ -499,12 +514,23 @@ export async function buildOrgReport(
   // missed twice at 0%, and only a count says so. The completed side has no
   // equivalent anywhere else — it is the one view of what the team actually
   // chooses to get done when the day is short.
+  // A span of its own costs a second query, and only when it differs. Filtering
+  // the page's rows would have been cheaper and wrong: a longer ranking window
+  // cannot be assembled from a shorter one.
+  const followsPage =
+    !ranking.window ||
+    (ranking.window.from === window.from && ranking.window.to === window.to);
+  const rankingWindow = ranking.window ?? window;
+  const rankingInstances = followsPage
+    ? instances
+    : await loadInstances(db, organisationId, rankingWindow);
+
   // Narrowed on the instance snapshot, not on the template. A task that moved
   // to somebody else in October must still report against whoever held it in
   // September — the same rule the rest of this file attributes by, and the one
   // that makes absence cover read correctly instead of crediting the wrong
   // person for a fortnight.
-  const rankingRows = instances.filter((row) => {
+  const rankingRows = rankingInstances.filter((row) => {
     if (ranking.assigneeId && row.assigneeId !== ranking.assigneeId) return false;
     if (ranking.categoryId) {
       const wanted = ranking.categoryId === UNCATEGORISED ? null : ranking.categoryId;
@@ -519,7 +545,7 @@ export async function buildOrgReport(
   // range is a filter whose every use returns an empty list.
   const peopleSeen = new Map<string, string>();
   const categoriesSeen = new Map<string, string>();
-  for (const row of instances) {
+  for (const row of rankingInstances) {
     const person = userNames.get(row.assigneeId);
     if (person) peopleSeen.set(person.id, person.name);
     const key = row.categoryId ?? UNCATEGORISED;
@@ -579,6 +605,8 @@ export async function buildOrgReport(
     people: [...peopleSeen].map(([id, name]) => ({ id, name })).sort(byName),
     categoriesAvailable: [...categoriesSeen].map(([id, name]) => ({ id, name })).sort(byName),
     filters: { assigneeId: ranking.assigneeId, categoryId: ranking.categoryId },
+    window: rankingWindow,
+    followsPage,
   };
 
   // --- By category ---------------------------------------------------------

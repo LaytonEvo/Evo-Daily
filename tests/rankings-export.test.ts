@@ -164,6 +164,30 @@ describeDb("the rankings export", () => {
     expect(response.headers.get("content-disposition")).toContain(expected);
   });
 
+  it("follows the panel's own span, not the page's", async () => {
+    const oldId = await task("Long ago", [GONE]);
+    await prisma.taskInstance.updateMany({
+      where: { templateId: oldId },
+      data: { dueDate: toDbDate(addDays(today, -60)) },
+    });
+    await task("Recent", [GONE]);
+
+    const short = (await csv("days=30")).slice(1).map((r) => r[2]);
+    expect(short).not.toContain("Long ago");
+
+    const long = (await csv("days=30&rankDays=90")).slice(1).map((r) => r[2]);
+    expect(long).toContain("Long ago");
+  });
+
+  it("names the file for the days it actually covers", async () => {
+    await task("Recent", [GONE]);
+    const response = await GET(
+      new Request("http://localhost/api/admin/reports/export?panel=rankings&days=30&rankDays=90"),
+    );
+    const name = response.headers.get("content-disposition") ?? "";
+    expect(name).toContain(addDays(today, -89));
+  });
+
   it("is not something a member can download", async () => {
     const member = await prisma.user.findUniqueOrThrow({ where: { id: fixture.memberId } });
     expect(member.role).toBe(Role.MEMBER);
