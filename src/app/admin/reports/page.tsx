@@ -11,7 +11,14 @@ export const dynamic = "force-dynamic";
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ days?: string; from?: string; to?: string }>;
+  searchParams: Promise<{
+    days?: string;
+    from?: string;
+    to?: string;
+    /** Narrow the rankings panel only. */
+    rankBy?: string;
+    rankCat?: string;
+  }>;
 }) {
   const admin = await requireAdminPage();
   const params = await searchParams;
@@ -23,7 +30,10 @@ export default async function ReportsPage({
     to: params.to,
   }, today);
 
-  const report = await buildOrgReport(prisma, admin.organisationId, window);
+  const report = await buildOrgReport(prisma, admin.organisationId, window, {
+    assigneeId: params.rankBy,
+    categoryId: params.rankCat,
+  });
 
   return (
     <AppShell user={admin} active="reports" title="Reports">

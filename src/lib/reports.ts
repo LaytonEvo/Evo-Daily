@@ -117,6 +117,11 @@ export type TaskTally = {
   isActive: boolean;
 };
 
+/** Who and what a ranking can be narrowed to, as the window actually saw them. */
+export type RankingOption = { id: string; name: string };
+
+export type RankingFilters = { assigneeId?: string; categoryId?: string };
+
 export type TaskRankings = {
   /** Most often missed first. */
   missed: TaskTally[];
@@ -125,7 +130,19 @@ export type TaskRankings = {
   /** How many distinct tasks had at least one, before the list was cut. */
   missedTasks: number;
   completedTasks: number;
+  /**
+   * The people and categories that appear anywhere in the window, not the
+   * whole org. A filter offering somebody with nothing on the range is a
+   * filter whose every use returns an empty list.
+   */
+  people: RankingOption[];
+  categoriesAvailable: RankingOption[];
+  /** Echoed back so the controls can show what is in force after a reload. */
+  filters: RankingFilters;
 };
+
+/** The id used for tasks with no category, since a filter needs a value. */
+export const UNCATEGORISED = "none";
 
 export type CategoryRow = Totals & {
   categoryId: string | null;
@@ -353,6 +370,13 @@ export async function buildOrgReport(
   db: PrismaClient,
   organisationId: string,
   window: ReportWindow,
+  /**
+   * Narrows the rankings only. The tiles, trend and leaderboard keep showing
+   * the whole team: somebody narrowing "what gets dropped" to one person is
+   * asking about that person's tasks, not asking for the rest of the page to
+   * start disagreeing with the page they just linked somebody to.
+   */
+  rankingFilters: RankingFilters = {},
 ): Promise<OrgReport> {
   const previous = previousWindow(window);
 
@@ -453,7 +477,38 @@ export async function buildOrgReport(
   // missed twice at 0%, and only a count says so. The completed side has no
   // equivalent anywhere else — it is the one view of what the team actually
   // chooses to get done when the day is short.
-  const tallies: TaskTally[] = [...byTemplate.entries()].map(([templateId, rows]) => {
+  // Narrowed on the instance snapshot, not on the template. A task that moved
+  // to somebody else in October must still report against whoever held it in
+  // September — the same rule the rest of this file attributes by, and the one
+  // that makes absence cover read correctly instead of crediting the wrong
+  // person for a fortnight.
+  const rankingRows = instances.filter((row) => {
+    if (rankingFilters.assigneeId && row.assigneeId !== rankingFilters.assigneeId) return false;
+    if (rankingFilters.categoryId) {
+      const wanted = rankingFilters.categoryId === UNCATEGORISED ? null : rankingFilters.categoryId;
+      if (row.categoryId !== wanted) return false;
+    }
+    return true;
+  });
+
+  const rankingByTemplate = groupBy(rankingRows, (i) => i.templateId);
+
+  // Options come from the window, not the org: a name with nothing on this
+  // range is a filter whose every use returns an empty list.
+  const peopleSeen = new Map<string, string>();
+  const categoriesSeen = new Map<string, string>();
+  for (const row of instances) {
+    const person = userNames.get(row.assigneeId);
+    if (person) peopleSeen.set(person.id, person.name);
+    const key = row.categoryId ?? UNCATEGORISED;
+    categoriesSeen.set(
+      key,
+      row.categoryId ? (categoryById.get(row.categoryId)?.name ?? "Removed category") : "Uncategorised",
+    );
+  }
+  const byName = (a: RankingOption, b: RankingOption) => a.name.localeCompare(b.name);
+
+  const tallies: TaskTally[] = [...rankingByTemplate.entries()].map(([templateId, rows]) => {
     const template = templateById.get(templateId);
     const { assigned } = totalsOf(rows);
     return {
@@ -476,7 +531,7 @@ export async function buildOrgReport(
   const rank = (status: InstanceStatus): TaskTally[] =>
     tallies
       .map((tally) => {
-        const rows = byTemplate.get(tally.templateId) ?? [];
+        const rows = rankingByTemplate.get(tally.templateId) ?? [];
         const count = rows.filter((r) => r.status === status).length;
         return { ...tally, count, share: tally.assigned === 0 ? null : count / tally.assigned };
       })
@@ -494,6 +549,9 @@ export async function buildOrgReport(
     completed: completedRanking.slice(0, RANKING_SIZE),
     missedTasks: missedRanking.length,
     completedTasks: completedRanking.length,
+    people: [...peopleSeen].map(([id, name]) => ({ id, name })).sort(byName),
+    categoriesAvailable: [...categoriesSeen].map(([id, name]) => ({ id, name })).sort(byName),
+    filters: rankingFilters,
   };
 
   // --- By category ---------------------------------------------------------

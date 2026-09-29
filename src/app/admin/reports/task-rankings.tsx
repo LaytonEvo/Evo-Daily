@@ -1,9 +1,10 @@
 "use client";
 
+import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { RANKING_SIZE, type TaskTally, type TaskRankings } from "@/lib/reports";
+import { RANKING_SIZE, type RankingOption, type TaskTally, type TaskRankings } from "@/lib/reports";
 import { formatRate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,8 @@ import { cn } from "@/lib/utils";
  * rota argument usually turns on and nothing else here shows.
  */
 export function TaskRankingsPanel({ rankings }: { rankings: TaskRankings }) {
+  const narrowed = Boolean(rankings.filters.assigneeId || rankings.filters.categoryId);
+
   return (
     <Card>
       <CardHeader>
@@ -29,6 +32,23 @@ export function TaskRankingsPanel({ rankings }: { rankings: TaskRankings }) {
           question as the worst completion rate below — a daily job missed eleven times matters
           more than a monthly one missed twice, and only counting says so.
         </CardDescription>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Narrow
+            param="rankBy"
+            label="Person"
+            allLabel="Everyone"
+            options={rankings.people}
+            value={rankings.filters.assigneeId ?? ""}
+          />
+          <Narrow
+            param="rankCat"
+            label="Category"
+            allLabel="All categories"
+            options={rankings.categoriesAvailable}
+            value={rankings.filters.categoryId ?? ""}
+          />
+        </div>
       </CardHeader>
 
       <CardContent>
@@ -38,18 +58,78 @@ export function TaskRankingsPanel({ rankings }: { rankings: TaskRankings }) {
             tone="missed"
             rows={rankings.missed}
             total={rankings.missedTasks}
-            empty="Nothing was missed in this range."
+            // Narrowed, "nothing was missed" would read as a clean sheet for
+            // the whole team when it is a statement about one person.
+            empty={narrowed ? "Nothing missed by this filter." : "Nothing was missed in this range."}
           />
           <Ranking
             title="Most completed"
             tone="completed"
             rows={rankings.completed}
             total={rankings.completedTasks}
-            empty="Nothing was completed in this range."
+            empty={
+              narrowed ? "Nothing completed by this filter." : "Nothing was completed in this range."
+            }
           />
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * One filter, held in the URL.
+ *
+ * In the URL rather than in component state so a narrowed view is a link —
+ * the whole point of finding that one person drops the same job every week is
+ * being able to send somebody the screen that shows it. It also survives the
+ * reload that follows every window change.
+ *
+ * Only the rankings narrow. The tiles and the leaderboard above keep showing
+ * the whole team, so the page never half-agrees with itself.
+ */
+function Narrow({
+  param,
+  label,
+  allLabel,
+  options,
+  value,
+}: {
+  param: string;
+  label: string;
+  allLabel: string;
+  options: RankingOption[];
+  value: string;
+}) {
+  const router = useRouter();
+  const params = useSearchParams();
+
+  if (options.length < 2) return null;
+
+  function pick(next: string) {
+    const query = new URLSearchParams(params.toString());
+    if (next) query.set(param, next);
+    else query.delete(param);
+    router.push(`/admin/reports?${query.toString()}`);
+  }
+
+  return (
+    <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span className="sr-only sm:not-sr-only">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => pick(e.target.value)}
+        aria-label={label}
+        className="h-9 rounded-lg border border-input bg-card px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <option value="">{allLabel}</option>
+        {options.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.name}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

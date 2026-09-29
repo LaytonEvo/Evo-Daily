@@ -50,13 +50,20 @@ export function WindowPicker({
   const [customTo, setCustomTo] = useState(to);
   const [showCustom, setShowCustom] = useState(isCustom);
 
-  // Changing the window must not silently drop the tile filter on a person's
-  // report — that would answer a different question to the one on screen.
-  const filter = params.get("filter");
-  const keepFilter = filter ? `&filter=${filter}` : "";
+  // Changing the window must not silently drop anything else on the screen —
+  // that would answer a different question to the one being asked. Everything
+  // but the window itself is carried over, rather than a hand-kept list of
+  // names: the list was already one short the first time a filter was added
+  // somewhere else on the page.
+  const WINDOW_KEYS = new Set(["days", "from", "to"]);
 
   function go(query: string) {
-    router.push(`${basePath}?${query}${keepFilter}`);
+    const kept = new URLSearchParams();
+    for (const [key, value] of params.entries()) {
+      if (!WINDOW_KEYS.has(key)) kept.append(key, value);
+    }
+    const rest = kept.toString();
+    router.push(`${basePath}?${query}${rest ? `&${rest}` : ""}`);
   }
 
   return (
