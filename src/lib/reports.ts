@@ -122,6 +122,12 @@ export type RankingOption = { id: string; name: string };
 
 export type RankingFilters = { assigneeId?: string; categoryId?: string };
 
+/** A ranking request: what to narrow to, and how much of it to return. */
+export type RankingQuery = RankingFilters & { limit?: number };
+
+/** Ask for the whole ranking rather than the screen's top handful. */
+export const RANKING_ALL = Number.MAX_SAFE_INTEGER;
+
 export type TaskRankings = {
   /** Most often missed first. */
   missed: TaskTally[];
@@ -366,6 +372,22 @@ export function buildTrend(
   return points;
 }
 
+/**
+ * Who a task belonged to over the window.
+ *
+ * Usually one person. When cover moved it mid-window there is no single right
+ * answer, and naming one of them would be a quiet lie — so it says how many.
+ */
+function ownerOf(
+  rows: { assigneeId: string }[],
+  userNames: Map<string, { id: string; name: string }>,
+): string {
+  const ids = new Set(rows.map((r) => r.assigneeId));
+  if (ids.size === 0) return "—";
+  if (ids.size === 1) return userNames.get([...ids][0])?.name ?? "—";
+  return `${ids.size} people`;
+}
+
 export async function buildOrgReport(
   db: PrismaClient,
   organisationId: string,
@@ -376,7 +398,7 @@ export async function buildOrgReport(
    * asking about that person's tasks, not asking for the rest of the page to
    * start disagreeing with the page they just linked somebody to.
    */
-  rankingFilters: RankingFilters = {},
+  ranking: RankingQuery = {},
 ): Promise<OrgReport> {
   const previous = previousWindow(window);
 
@@ -483,9 +505,9 @@ export async function buildOrgReport(
   // that makes absence cover read correctly instead of crediting the wrong
   // person for a fortnight.
   const rankingRows = instances.filter((row) => {
-    if (rankingFilters.assigneeId && row.assigneeId !== rankingFilters.assigneeId) return false;
-    if (rankingFilters.categoryId) {
-      const wanted = rankingFilters.categoryId === UNCATEGORISED ? null : rankingFilters.categoryId;
+    if (ranking.assigneeId && row.assigneeId !== ranking.assigneeId) return false;
+    if (ranking.categoryId) {
+      const wanted = ranking.categoryId === UNCATEGORISED ? null : ranking.categoryId;
       if (row.categoryId !== wanted) return false;
     }
     return true;
@@ -517,7 +539,11 @@ export async function buildOrgReport(
       // rule the rest of this file follows: a task renamed in October must
       // not rewrite September.
       title: rows[0]?.title ?? template?.title ?? "Removed task",
-      assigneeName: template?.assignee.name ?? "—",
+      // From the snapshot, not from the template. The filter narrows on who
+      // held the task on the day, so a name read off the template would let
+      // "narrow to Marek" return a row labelled with whoever owns it now —
+      // which is exactly what absence cover does to a fortnight of rows.
+      assigneeName: ownerOf(rows, userNames),
       categoryName: template?.categoryId
         ? (categoryById.get(template.categoryId)?.name ?? null)
         : null,
@@ -544,14 +570,15 @@ export async function buildOrgReport(
   const missedRanking = rank(InstanceStatus.MISSED);
   const completedRanking = rank(InstanceStatus.COMPLETED);
 
+  const limit = ranking.limit ?? RANKING_SIZE;
   const rankings: TaskRankings = {
-    missed: missedRanking.slice(0, RANKING_SIZE),
-    completed: completedRanking.slice(0, RANKING_SIZE),
+    missed: missedRanking.slice(0, limit),
+    completed: completedRanking.slice(0, limit),
     missedTasks: missedRanking.length,
     completedTasks: completedRanking.length,
     people: [...peopleSeen].map(([id, name]) => ({ id, name })).sort(byName),
     categoriesAvailable: [...categoriesSeen].map(([id, name]) => ({ id, name })).sort(byName),
-    filters: rankingFilters,
+    filters: { assigneeId: ranking.assigneeId, categoryId: ranking.categoryId },
   };
 
   // --- By category ---------------------------------------------------------

@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { RANKING_SIZE, type RankingOption, type TaskTally, type TaskRankings } from "@/lib/reports";
 import { formatRate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { ExportLink } from "./reports-screen";
 
 /**
  * What the team gets done, and what it drops.
@@ -20,17 +21,36 @@ import { cn } from "@/lib/utils";
  * says what the team reaches for when the day is short — which is the thing a
  * rota argument usually turns on and nothing else here shows.
  */
-export function TaskRankingsPanel({ rankings }: { rankings: TaskRankings }) {
+export function TaskRankingsPanel({
+  rankings,
+  query,
+}: {
+  rankings: TaskRankings;
+  /** The window, as the other panels' exports carry it. */
+  query: string;
+}) {
   const narrowed = Boolean(rankings.filters.assigneeId || rankings.filters.categoryId);
+
+  // The export carries whatever is narrowing the screen, or a file that does
+  // not match the page it was downloaded from is worse than no file.
+  const exportQuery = [
+    query,
+    rankings.filters.assigneeId ? `rankBy=${rankings.filters.assigneeId}` : "",
+    rankings.filters.categoryId ? `rankCat=${rankings.filters.categoryId}` : "",
+  ]
+    .filter(Boolean)
+    .join("&");
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex-row items-start justify-between gap-3">
+        <div>
         <CardTitle>What gets done, and what gets dropped</CardTitle>
         <CardDescription>
           The tasks that came up most often on each side over this range, by count. Not the same
           question as the worst completion rate below — a daily job missed eleven times matters
-          more than a monthly one missed twice, and only counting says so.
+          more than a monthly one missed twice, and only counting says so. The CSV has every
+          task, not just the ones listed here.
         </CardDescription>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -49,6 +69,8 @@ export function TaskRankingsPanel({ rankings }: { rankings: TaskRankings }) {
             value={rankings.filters.categoryId ?? ""}
           />
         </div>
+        </div>
+        <ExportLink href={`/api/admin/reports/export?panel=rankings&${exportQuery}`} />
       </CardHeader>
 
       <CardContent>

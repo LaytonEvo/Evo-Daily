@@ -154,6 +154,35 @@ describeDb("task rankings", () => {
     expect(row.assigneeName).not.toBe("—");
   });
 
+  /**
+   * The owner shown has to be the one the filter narrows on, or "narrow to
+   * Marek" can return a row labelled with whoever owns the task today — which
+   * is precisely what a fortnight of absence cover does to the template.
+   */
+  it("names whoever held the task, not whoever holds it now", async () => {
+    const templateId = await task("Handed over", [GONE, GONE]);
+    await prisma.taskTemplate.update({
+      where: { id: templateId },
+      data: { assigneeId: fixture.otherMemberId },
+    });
+
+    const held = await prisma.user.findUniqueOrThrow({ where: { id: fixture.memberId } });
+    const [row] = (await report()).rankings.missed;
+    expect(row.assigneeName).toBe(held.name);
+  });
+
+  it("says how many when a task changed hands inside the window", async () => {
+    const templateId = await task("Shared", [GONE, GONE]);
+    const [one] = await prisma.taskInstance.findMany({ where: { templateId }, take: 1 });
+    await prisma.taskInstance.update({
+      where: { id: one.id },
+      data: { assigneeId: fixture.otherMemberId },
+    });
+
+    const [row] = (await report()).rankings.missed;
+    expect(row.assigneeName).toBe("2 people");
+  });
+
   it("does not reach into another organisation", async () => {
     await task("Ours", [GONE]);
     const other = await prisma.organisation.create({

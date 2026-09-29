@@ -2,7 +2,13 @@ import { InstanceStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { csvRate, csvResponse, toCsv } from "@/lib/csv";
 import { errorResponse, requireApiAdmin } from "@/lib/guards";
-import { buildOrgReport, buildPersonReport, buildWindow } from "@/lib/reports";
+import {
+  buildOrgReport,
+  buildPersonReport,
+  buildWindow,
+  RANKING_ALL,
+  type TaskRankings,
+} from "@/lib/reports";
 import { toDateOnly, toDbDate } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -99,7 +105,14 @@ export async function GET(request: Request) {
       return csvResponse(csv, `evotasks_${slug(person.user.name)}_${stamp}.csv`);
     }
 
-    const report = await buildOrgReport(prisma, admin.organisationId, window);
+    // The rankings panel is the one screen that shows a deliberate top ten, so
+    // its export is the whole ranking rather than the ten. The panel says so;
+    // a ten-row spreadsheet would be a worse answer than no export at all.
+    const report = await buildOrgReport(prisma, admin.organisationId, window, {
+      assigneeId: url.searchParams.get("rankBy") ?? undefined,
+      categoryId: url.searchParams.get("rankCat") ?? undefined,
+      limit: panel === "rankings" ? RANKING_ALL : undefined,
+    });
 
     switch (panel) {
       case "summary": {
@@ -172,6 +185,21 @@ export async function GET(request: Request) {
         return csvResponse(csv, `evotasks_problem_tasks_${stamp}.csv`);
       }
 
+      case "rankings": {
+        const csv = toCsv(
+          ["side", "rank", "task", "owner", "category", "count", "due", "share", "active"],
+          rankingRows(report.rankings),
+        );
+        // This is the only panel whose export can be narrowed, so it is the
+        // only one where two different files would otherwise land in Downloads
+        // under the same name and differ only on opening them.
+        const who = report.rankings.people.find(
+          (p) => p.id === report.rankings.filters.assigneeId,
+        );
+        const narrowed = who ? `_${slug(who.name)}` : "";
+        return csvResponse(csv, `evotasks_rankings${narrowed}_${stamp}.csv`);
+      }
+
       case "categories": {
         const csv = toCsv(
           ["category", "assigned", "completed", "missed", "outstanding", "completion_rate", "on_time_rate"],
@@ -224,4 +252,29 @@ export async function GET(request: Request) {
 
 function slug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+/**
+ * Both rankings as one table, so a spreadsheet can pivot on the side column
+ * instead of opening two files and joining them by hand.
+ */
+function rankingRows(rankings: TaskRankings): (string | number)[][] {
+  const sides = [
+    ["missed", rankings.missed],
+    ["completed", rankings.completed],
+  ] as const;
+
+  return sides.flatMap(([side, list]) =>
+    list.map((task, index) => [
+      side,
+      index + 1,
+      task.title,
+      task.assigneeName,
+      task.categoryName ?? "",
+      task.count,
+      task.assigned,
+      csvRate(task.share),
+      String(task.isActive),
+    ]),
+  );
 }
