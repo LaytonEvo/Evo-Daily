@@ -13,6 +13,8 @@ import { prisma } from "./db";
 import { ApiError } from "./errors";
 import { recordActivity } from "./activity";
 import type { Actor } from "./instances";
+import { sessionIsLive } from "./session-rules";
+import { canAccessModule, type HubModuleKey } from "./hub";
 
 export { ApiError };
 
@@ -23,6 +25,7 @@ export type SessionUser = {
   role: Role;
   organisationId: string;
   mustChangePassword: boolean;
+  moduleAccess: string[];
 };
 
 /**
@@ -47,7 +50,7 @@ export async function currentUser(): Promise<SessionUser | null> {
   return record && toSessionUser(record);
 }
 
-type UserRecord = SessionUser & { lastActiveAt: Date | null };
+type UserRecord = SessionUser & { lastActiveAt: Date | null; sessionsRevokedAt: Date | null };
 
 /** The signed-in user's row, or null if the token no longer names a live one. */
 async function loadUser(): Promise<UserRecord | null> {
@@ -65,11 +68,15 @@ async function loadUser(): Promise<UserRecord | null> {
       mustChangePassword: true,
       isActive: true,
       lastActiveAt: true,
+      moduleAccess: true,
+      sessionsRevokedAt: true,
     },
   });
 
   // Deleted or deactivated since the token was issued: treat as signed out.
   if (!record || !record.isActive) return null;
+  // Idle for 12 hours, or signed out by an admin: likewise.
+  if (!sessionIsLive(record, session.user.issuedAt)) return null;
   return record;
 }
 
@@ -81,6 +88,7 @@ function toSessionUser(record: UserRecord): SessionUser {
     role: record.role,
     organisationId: record.organisationId,
     mustChangePassword: record.mustChangePassword,
+    moduleAccess: record.moduleAccess,
   };
 }
 
@@ -106,6 +114,20 @@ export async function requireUser(): Promise<SessionUser> {
 export async function requireAdminPage(): Promise<SessionUser> {
   const user = await requireUser();
   if (user.role !== Role.ADMIN) redirect("/my-day?denied=admin");
+  return user;
+}
+
+/** For pages: anyone without access to this hub module lands back on their day. */
+export async function requireModulePage(module: HubModuleKey): Promise<SessionUser> {
+  const user = await requireUser();
+  if (!canAccessModule(user, module)) redirect("/my-day?denied=admin");
+  return user;
+}
+
+/** For API routes: 403 without access to this hub module. */
+export async function requireApiModule(module: HubModuleKey): Promise<SessionUser> {
+  const user = await requireApiUser();
+  if (!canAccessModule(user, module)) throw new ApiError("Not available to you", 403);
   return user;
 }
 
