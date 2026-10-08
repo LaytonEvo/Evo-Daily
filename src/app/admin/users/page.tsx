@@ -35,7 +35,6 @@ export default async function UsersPage() {
         slackUserId: true,
         managerId: true,
         mustChangePassword: true,
-        moduleAccess: true,
         _count: { select: { assignedTemplates: { where: { isActive: true } } } },
       },
       orderBy: [{ isActive: "desc" }, { name: "asc" }],
@@ -76,7 +75,6 @@ export default async function UsersPage() {
           slackUserId: u.slackUserId,
           managerId: u.managerId,
           mustChangePassword: u.mustChangePassword,
-          moduleAccess: u.moduleAccess,
           activeTasks: u._count.assignedTemplates,
           // The real thing now: when they last opened a page, not when they
           // last typed a password.
