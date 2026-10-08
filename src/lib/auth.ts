@@ -1,13 +1,9 @@
 import NextAuth, { type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
-import { randomBytes } from "node:crypto";
 import { Role, SignInOutcome } from "@prisma/client";
 import { prisma } from "./db";
 import { recordSignIn } from "./sign-ins";
-import { hashPassword } from "./password";
-import { ALLOWED_GOOGLE_DOMAIN, isAllowedGoogleProfile } from "./session-rules";
 
 declare module "next-auth" {
   interface Session {
@@ -16,8 +12,6 @@ declare module "next-auth" {
       role: Role;
       organisationId: string;
       mustChangePassword: boolean;
-      /** When this session was issued, in ms. Compared against force sign-out. */
-      issuedAt?: number;
     } & DefaultSession["user"];
   }
 
@@ -25,7 +19,6 @@ declare module "next-auth" {
     role: Role;
     organisationId: string;
     mustChangePassword: boolean;
-    issuedAt?: number;
   }
 }
 
@@ -35,32 +28,17 @@ declare module "@auth/core/jwt" {
     role: Role;
     organisationId: string;
     mustChangePassword: boolean;
-    issuedAt?: number;
   }
 }
 
-/** Google sign-in is offered only when a client is configured. */
-export const googleSignInEnabled = Boolean(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET);
-
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  // Small closed team, no email-delivery dependency: a password, or Google for
-  // anyone in the company Workspace. Either way only an account an admin has
-  // created can sign in — there is no self-registration. JWT session in an
-  // httpOnly cookie; the 12-hour idle limit and force sign-out are enforced in
-  // lib/guards.ts against the database, because a JWT can't be recalled.
+  // Small closed team, no email-delivery dependency: credentials only, with a
+  // JWT session in an httpOnly cookie. No self-registration — admins create
+  // accounts.
   session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 30 },
   pages: { signIn: "/login" },
   trustHost: true,
   providers: [
-    ...(googleSignInEnabled
-      ? [
-          Google({
-            // `hd` narrows Google's account chooser to the Workspace; the
-            // signIn callback below is what actually enforces it.
-            authorization: { params: { hd: ALLOWED_GOOGLE_DOMAIN, prompt: "select_account" } },
-          }),
-        ]
-      : []),
     Credentials({
       credentials: {
         email: { label: "Email", type: "email" },
@@ -108,51 +86,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async signIn({ account, profile }) {
-      if (account?.provider !== "google") return true;
-      if (!isAllowedGoogleProfile(profile)) return "/login?error=google-domain";
-
-      const email = profile!.email!.toLowerCase();
-      const user = await prisma.user.findUnique({ where: { email } });
-      if (!user) return "/login?error=google-no-account";
-
-      await recordSignIn(prisma, {
-        userId: user.id,
-        organisationId: user.organisationId,
-        outcome: user.isActive ? SignInOutcome.SUCCESS : SignInOutcome.DEACTIVATED,
-      });
-      if (!user.isActive) return "/login?error=google-no-account";
-
-      // Somebody who signs in with Google never needs the temporary password an
-      // admin gave them. Retire it rather than leave it working unseen, and
-      // skip the forced change: they can't change a password they don't use.
-      if (user.mustChangePassword) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: {
-            mustChangePassword: false,
-            passwordHash: await hashPassword(randomBytes(32).toString("base64url")),
-          },
-        });
-      }
-      return true;
-    },
-    async jwt({ token, user, account, trigger }) {
-      if (user && account?.provider === "google") {
-        // `user` here is Google's profile; the account is ours, found by email.
-        const record = await prisma.user.findUniqueOrThrow({ where: { email: user.email!.toLowerCase() } });
-        token.id = record.id;
-        token.name = record.name;
-        token.role = record.role;
-        token.organisationId = record.organisationId;
-        token.mustChangePassword = record.mustChangePassword;
-        token.issuedAt = Date.now();
-      } else if (user) {
+    async jwt({ token, user, trigger }) {
+      if (user) {
         token.id = user.id!;
         token.role = user.role;
         token.organisationId = user.organisationId;
         token.mustChangePassword = user.mustChangePassword;
-        token.issuedAt = Date.now();
       }
       // Re-read on an explicit session update so a password change or a role
       // change takes effect without forcing a sign-out.
@@ -172,7 +111,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.role = token.role;
       session.user.organisationId = token.organisationId;
       session.user.mustChangePassword = token.mustChangePassword;
-      session.user.issuedAt = token.issuedAt;
       return session;
     },
   },

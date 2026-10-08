@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { ApiError, errorResponse } from "@/lib/guards";
 import { assertCronSecret } from "@/lib/cron-auth";
-import { isNudgeJob, nudgeNames } from "@/lib/nudge-jobs";
-import { runRegisteredJob } from "@/lib/job-registry";
+import { isNudgeJob, nudgeNames, runNudge } from "@/lib/nudge-jobs";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +30,7 @@ export async function POST(request: Request) {
       throw new ApiError(`Unknown nudge. Expected one of: ${nudgeNames()}`, 400);
     }
 
-    return NextResponse.json(await runRegisteredJob(prisma, `nudge.${job}`, "schedule"));
+    return NextResponse.json(await runNudge(job, prisma));
   } catch (error) {
     return errorResponse(error);
   }
