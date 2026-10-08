@@ -38,9 +38,13 @@ describe("module access", () => {
   });
 
   it("hides modules that aren't built yet, even from admins", () => {
-    expect(hubNavFor(admin).map((m) => m.key)).toEqual(["activity"]);
-    expect(hubNavFor(member)).toEqual([]);
-    expect(hubNavFor({ role: Role.MANAGER, moduleAccess: ["activity"] }).map((m) => m.key)).toEqual(["activity"]);
+    expect(hubNavFor(admin).map((m) => m.key)).toEqual(["approvals", "activity", "health"]);
+    expect(hubNavFor(member).map((m) => m.key)).toEqual(["approvals"]);
+    expect(hubNavFor({ role: Role.MANAGER, moduleAccess: ["activity"] }).map((m) => m.key)).toEqual([
+      "approvals",
+      "activity",
+      "health",
+    ]);
   });
 
   it("links a module-raised task back to its source", () => {

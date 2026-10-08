@@ -29,6 +29,7 @@ model Organisation {
   attachments Attachment[]
   signIns     SignIn[]
   dayChecks   DayCheck[]
+  approvals   Approval[]
 }
 
 model User {
@@ -66,6 +67,8 @@ model User {
   dayChecks          DayCheck[]
   dayCheckReplies    DayCheckReply[]
   dayCheckReads      DayCheckRead[]
+  approvalsAssigned  Approval[]      @relation("ApprovalAssignee")
+  approvalsDecided   Approval[]      @relation("ApprovalDecider")
   /**
    * The last time they loaded a page, not the last time they signed in. The
    * session cookie lasts a month, so a sign-in says when somebody first typed
@@ -506,4 +509,143 @@ model JobRun {
   @@index([module, startedAt])
   @@index([status, startedAt])
   @@map("activity_log")
+}
+
+// ---------------------------------------------------------------------------
+// Evo Ops Hub, Phase 2: approvals, integrations, incidents, settings, errors
+// ---------------------------------------------------------------------------
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+/**
+ * Something waiting for a person's decision before a module acts on it:
+ * anything that goes to customers, spends money or writes to Xero.
+ *
+ * Decided exactly once: the decision is a conditional update on PENDING, and
+ * the module's action is claimed by setting executedAt, so a double-click or
+ * two people approving at once runs the action one time.
+ */
+model Approval {
+  id              String         @id @default(cuid())
+  organisationId  String
+  module          String
+  itemType        String         @map("item_type")
+  title           String
+  summary         String
+  payload         Json           @default("{}")
+  previewUrl      String?        @map("preview_url")
+  /// Who should decide. Null means any admin, or a manager with the module.
+  assigneeId      String?        @map("assignee_id")
+  /// Who or what raised it, for rework tasks. Null for a job.
+  requestedById   String?        @map("requested_by")
+  /// The module's own reference, so a job re-raising the same item while it
+  /// is still pending gets the existing approval back.
+  sourceRef       String?        @map("source_ref")
+  status          ApprovalStatus @default(PENDING)
+  decidedById     String?        @map("decided_by")
+  decidedAt       DateTime?      @map("decided_at")
+  decisionNote    String?        @map("decision_note")
+  /// Edits made before approving, merged over the payload for the action.
+  edits           Json?
+  needsRework     Boolean        @default(false) @map("needs_rework")
+  expiresAt       DateTime?      @map("expires_at")
+  executedAt      DateTime?      @map("executed_at")
+  executionStatus String?        @map("execution_status") // running | success | failed
+  executionResult Json?          @map("execution_result")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  assignee     User?        @relation("ApprovalAssignee", fields: [assigneeId], references: [id])
+  decidedBy    User?        @relation("ApprovalDecider", fields: [decidedById], references: [id])
+
+  @@index([status, createdAt])
+  @@index([assigneeId, status])
+  @@index([module, sourceRef])
+  @@map("approvals")
+}
+
+enum IntegrationStatus {
+  OK
+  DEGRADED
+  DOWN
+}
+
+/// Connection health per external system, updated by its client on every call.
+model Integration {
+  name           String            @id
+  status         IntegrationStatus @default(OK)
+  lastSuccessAt  DateTime?         @map("last_success_at")
+  lastErrorAt    DateTime?         @map("last_error_at")
+  lastError      String?           @map("last_error")
+  tokenExpiresAt DateTime?         @map("token_expires_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  @@map("integrations")
+}
+
+/**
+ * Something wrong that a person has been told about: an integration down, a
+ * job that missed its window or failed twice. One alert when it opens, none
+ * while it stays open, and a "recovered" message when it closes.
+ */
+model Incident {
+  id                 String    @id @default(cuid())
+  /// e.g. "integration:slack", "job-missed:tasks.generate". Set while open and
+  /// cleared on recovery, so there is at most one open incident per key.
+  openKey            String?   @unique @map("open_key")
+  key                String
+  title              String
+  detail             String?
+  openedAt           DateTime  @default(now()) @map("opened_at")
+  resolvedAt         DateTime? @map("resolved_at")
+  alertSent          Boolean   @default(false) @map("alert_sent")
+  recoveredAlertSent Boolean   @default(false) @map("recovered_alert_sent")
+
+  @@index([key, openedAt])
+  @@map("incidents")
+}
+
+/// Hub-wide settings: automation kill switches and the like.
+model HubSetting {
+  key         String   @id
+  value       Json
+  updatedById String?  @map("updated_by")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("hub_settings")
+}
+
+/// Every change to a hub setting, with who and why.
+model HubSettingChange {
+  id     String   @id @default(cuid())
+  key    String
+  value  Json
+  reason String?
+  userId String?  @map("user_id")
+  at     DateTime @default(now())
+
+  @@index([key, at])
+  @@map("hub_setting_changes")
+}
+
+/// Server errors caught by instrumentation, so crashes are visible without
+/// anyone reporting them.
+model AppError {
+  id      String   @id @default(cuid())
+  at      DateTime @default(now())
+  message String
+  digest  String?
+  path    String?
+  method  String?
+  kind    String? // render | route | action | middleware
+  stack   String?
+
+  @@index([at])
+  @@map("app_errors")
 }

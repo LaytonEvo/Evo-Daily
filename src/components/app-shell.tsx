@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Role } from "@prisma/client";
-import { Activity, CalendarCheck, LayoutGrid, Menu, MessageSquare, Repeat, Users, X } from "lucide-react";
+import { Activity, CalendarCheck, HeartPulse, Inbox, LayoutGrid, Menu, MessageSquare, Repeat, Users, X } from "lucide-react";
 import { hubNavFor } from "@/lib/hub";
 import { SignOutButton } from "./sign-out-button";
 import { ThemeToggle } from "./theme-toggle";
@@ -42,7 +42,7 @@ const ADMIN_NAV: NavItem[] = [
  * two links are worth a sidebar when one of them carries a count somebody is
  * waiting on.
  */
-const HUB_ICONS: Record<string, typeof LayoutGrid> = { activity: Activity };
+const HUB_ICONS: Record<string, typeof LayoutGrid> = { activity: Activity, approvals: Inbox, health: HeartPulse };
 
 const MEMBER_NAV: NavItem[] = [
   { href: "/my-day", label: "My day", key: "my-day", icon: CalendarCheck },

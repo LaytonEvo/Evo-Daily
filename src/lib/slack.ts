@@ -12,6 +12,8 @@
  * as it does today and every job below reports itself as skipped.
  */
 
+import { trackIntegrationCall } from "./integrations";
+
 const SLACK_API = "https://slack.com/api";
 
 export function slackEnabled(): boolean {
@@ -57,9 +59,13 @@ export async function postMessage(
     });
 
     const body = (await response.json()) as { ok: boolean; error?: string };
-    return { ok: body.ok, error: body.error };
+    const result = { ok: body.ok, error: body.error };
+    trackIntegrationCall("slack", result);
+    return result;
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "request_failed" };
+    const result = { ok: false, error: error instanceof Error ? error.message : "request_failed" };
+    trackIntegrationCall("slack", result);
+    return result;
   }
 }
 

@@ -8,6 +8,8 @@ import { Card } from "@/components/ui/card";
 import { JOBS } from "@/lib/job-registry";
 import { formatDateOnly, formatTimeLondon, todayInLondon } from "@/lib/time";
 import { RunNowButton } from "./run-now-button";
+import { CopyButton } from "@/components/copy-button";
+import { copyForRun } from "@/lib/claude-copy";
 
 export const metadata = { title: "Activity · EvoTasks" };
 export const dynamic = "force-dynamic";
@@ -160,6 +162,16 @@ export default async function ActivityPage({
                     <td className="hidden whitespace-nowrap px-3 py-2.5 sm:table-cell">{duration(run)}</td>
                     <td className="px-3 py-2.5">
                       {run.message}
+                      {run.status === JobRunStatus.FAILED || run.status === JobRunStatus.WARNING ? (
+                        <div className="mt-1">
+                          <CopyButton
+                            text={copyForRun(
+                              run,
+                              runs.filter((r) => r.jobName === run.jobName).slice(0, 5),
+                            )}
+                          />
+                        </div>
+                      ) : null}
                       {run.details ? (
                         <details className="mt-1">
                           <summary className="cursor-pointer text-xs text-muted-foreground">Details</summary>

@@ -9,6 +9,7 @@ import { DayCheck } from "./day-check";
 import { pendingDayCheck } from "@/lib/day-check";
 import { canAccessModule } from "@/lib/hub";
 import { HubStatus } from "./hub-status";
+import { ApprovalsStrip } from "./approvals-strip";
 
 export const metadata = { title: "My day · EvoTasks" };
 export const dynamic = "force-dynamic";
@@ -34,7 +35,8 @@ export default async function MyDayPage({
 
   return (
     <AppShell user={user}>
-      {canAccessModule(user, "activity") ? <HubStatus /> : null}
+      {canAccessModule(user, "health") ? <HubStatus /> : null}
+      <ApprovalsStrip user={user} />
       <MyDayScreen
         user={{ name: user.name }}
         day={day}

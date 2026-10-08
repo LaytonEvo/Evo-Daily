@@ -50,6 +50,10 @@ case "$JOB" in
     # work; this one survives being embedded in a container start command.
     ENDPOINT="$APP_URL/api/cron/nudge/$JOB"
     ;;
+  hub.*)
+    # Hub jobs run through the generic route by registry name.
+    ENDPOINT="$APP_URL/api/cron/run/$JOB"
+    ;;
   *)
     echo "Unknown JOB: $JOB" >&2
     exit 1

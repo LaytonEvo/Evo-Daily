@@ -17,7 +17,8 @@ EvoTasks is the foundation of the **Evo Ops Hub**: one app for Evolution Golf
 operations, with email, TikTok, finance/AP and reporting plugging in as
 modules around Tasks over the coming phases. The spec is
 [docs/hub/evo-ops-hub-spec.md](docs/hub/evo-ops-hub-spec.md); progress is in
-[docs/hub/phase-1-report.md](docs/hub/phase-1-report.md).
+[docs/hub/phase-1-report.md](docs/hub/phase-1-report.md) and
+[docs/hub/phase-2-report.md](docs/hub/phase-2-report.md).
 
 What the hub adds to Tasks so far:
 
@@ -34,6 +35,20 @@ What the hub adds to Tasks so far:
 - **The activity log**: every scheduled job run, success or failure, on the
   Activity page with a "Run now" button. Jobs are listed in
   `src/lib/job-registry.ts` with their schedule and what a good run looks like.
+- **The approvals inbox** (`/approvals`, `src/lib/approvals.ts`): one queue for
+  anything that needs sign-off before a module acts. Approve, reject (with an
+  optional rework task) or edit-then-approve. The decision and the module's
+  action each happen exactly once, however many times the button is pressed.
+  Modules register what approving does with `registerApprovalHandler()`.
+- **Health** (`/admin/health`): each module green, amber or red; connections;
+  open incidents; app errors; automation kill switches; the hub owner; and
+  buttons for a test approval and a test task.
+- **Monitoring** (`hub.monitor`, every 15 minutes): missed windows, jobs failing
+  twice, repeated warnings, connections down and tokens expiring. One Slack
+  alert to admins per incident and one when it recovers, plus a task for the
+  hub owner where somebody needs to act. A 07:30 health digest for admins.
+- **Error capture**: server errors land in `app_errors` via
+  `src/instrumentation.ts` and show on Health, each with "Copy for Claude Code".
 
 ---
 
@@ -129,8 +144,21 @@ authenticated request.
 3. Generate a domain for the web service and set `NEXTAUTH_URL` to it.
 4. For each cron job, create a service from `curlimages/curl`, set `APP_URL`,
    `CRON_SECRET` and `JOB`, and give it the schedule and start command from
-   `cron.sh`. Wrap the command in `sh -c '…'` — Railway execs an image's start
+   `cron.sh`. The hub monitor (`JOB=hub.monitor`, schedule `*/15 * * * *`)
+   calls `/api/cron/run/hub.monitor`. Wrap the command in `sh -c '…'` — Railway execs an image's start
    command without a shell, so `$APP_URL` will not otherwise expand.
+
+### Deploy checks
+
+- **CI** (`.github/workflows/ci.yml`) runs typecheck, lint, every test against
+  a real Postgres, and a build on every pull request. Turn on **Wait for CI** in
+  the web service's Railway settings so a red run blocks the deploy.
+- **Smoke test** after each production deploy:
+  `SMOKE_URL=https://… SMOKE_EMAIL=… SMOKE_PASSWORD=… npm run smoke`. It is read-only:
+  it checks health, the guards, and that each screen loads signed in.
+- **Uptime**: point an external monitor (Better Stack, UptimeRobot) at
+  `/api/health` every 5 minutes. It is the one thing that notices when the
+  whole app is down and can't alert anyone itself.
 
 ### On cron and the clocks
 
@@ -239,6 +267,7 @@ and `wasLate` still records that they did, so the metric keeps its teeth.
 | `afternoon-nudge` | 16:00 weekdays | DM only those with something still open |
 | `manager-digest` | Monday 08:00 | Last week's numbers to the manager channel |
 | `miss-alerts` | Monday 08:00 | DM a manager about anyone on 3+ misses in seven days |
+| `hub.monitor` | every 15 minutes | Missed windows, repeat failures, connections; expires approvals; runs `hub.housekeeping` daily and `hub.admin-digest` from 07:30 |
 
 Two DMs a day is the whole personal cadence, and deliberately so: midday, when
 there is still time to act on it, and 16:00 for whatever is left. The miss

@@ -8,6 +8,7 @@ import { buildOrgReport, buildWindow } from "./reports";
 import { escape, appUrl, link, managerChannelId, postMessage, slackEnabled, type Block } from "./slack";
 import { briefBlocks } from "./slack-blocks";
 import { formatRate } from "./utils";
+import { pendingCounts } from "./approvals";
 import {
   addDays,
   formatDateOnly,
@@ -83,12 +84,13 @@ export async function morningBrief(
       slackUserId: { not: null },
       ...(options.onlyUserIds ? { id: { in: options.onlyUserIds } } : {}),
     },
-    select: { id: true, name: true, slackUserId: true },
+    select: { id: true, name: true, slackUserId: true, role: true, moduleAccess: true },
   });
 
   const messages: Message[] = [];
 
   for (const user of users) {
+    const approvals = await pendingCounts(db, user);
     const tasks = await db.taskInstance.findMany({
       where: {
         assigneeId: user.id,
@@ -99,7 +101,7 @@ export async function morningBrief(
       select: { id: true, title: true, dueDate: true, dueAt: true },
     });
 
-    if (tasks.length === 0) continue;
+    if (tasks.length === 0 && approvals.total === 0) continue;
 
     const lines = tasks.map((task) => {
       const overdue = task.dueDate < toDbDate(today);
@@ -110,15 +112,24 @@ export async function morningBrief(
       return `• ${escape(task.title)}${time}${late}`;
     });
 
-    const heading = `*${escape(user.name.split(" ")[0])} — ${tasks.length} task${tasks.length === 1 ? "" : "s"} today*`;
+    const first = escape(user.name.split(" ")[0]);
+    const heading = tasks.length
+      ? `*${first} — ${tasks.length} task${tasks.length === 1 ? "" : "s"} today*`
+      : `*${first} — nothing due today*`;
+    // Approvals ride on the brief rather than a third DM a day.
+    const approvalsLine = approvals.total
+      ? `:inbox_tray: ${approvals.total} approval${approvals.total === 1 ? "" : "s"} waiting for you${
+          approvals.stale ? `, ${approvals.stale} for over 48 hours` : ""
+        }. ${link(appUrl("/approvals"), "Review")}`
+      : null;
 
     messages.push({
       to: user.slackUserId!,
       // The text is the notification and the fallback; the blocks carry the
       // per-task Done buttons.
-      text: [heading, ...lines, link(appUrl("/my-day"), "Open EvoTasks")].join("\n"),
+      text: [heading, ...lines, ...(approvalsLine ? [approvalsLine] : []), link(appUrl("/my-day"), "Open EvoTasks")].join("\n"),
       blocks: briefBlocks(
-        heading,
+        approvalsLine ? `${heading}\n${approvalsLine}` : heading,
         tasks.map((task) => ({
           id: task.id,
           title: task.title,

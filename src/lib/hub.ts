@@ -12,12 +12,13 @@
 import { Role } from "@prisma/client";
 
 export const HUB_MODULES = [
-  { key: "approvals", label: "Approvals", href: "/approvals", built: false },
+  { key: "approvals", label: "Approvals", href: "/approvals", built: true },
   { key: "email", label: "Email", href: "/email", built: false },
   { key: "tiktok", label: "TikTok", href: "/tiktok", built: false },
   { key: "finance", label: "Finance", href: "/finance", built: false },
   { key: "reporting", label: "Reporting", href: "/reporting", built: false },
   { key: "activity", label: "Activity", href: "/admin/activity", built: true },
+  { key: "health", label: "Health", href: "/admin/health", built: true },
 ] as const;
 
 export type HubModuleKey = (typeof HUB_MODULES)[number]["key"];
@@ -40,6 +41,8 @@ type Viewer = { role: Role; moduleAccess: string[] };
 export function canAccessModule(viewer: Viewer, module: HubModuleKey): boolean {
   if (viewer.role === Role.ADMIN) return true;
   if (module === "approvals") return true;
+  // Health is the hub owner's page, which comes with Activity access.
+  if (module === "health") return viewer.moduleAccess.includes("activity");
   return viewer.moduleAccess.includes(module);
 }
 

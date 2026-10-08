@@ -43,6 +43,12 @@ export async function resetDatabase(): Promise<void> {
   // author does not cascade, so deleting the admin who replied and the member
   // the check is about in one sweep can race into a foreign key error.
   await prisma.jobRun.deleteMany();
+  await prisma.approval.deleteMany();
+  await prisma.incident.deleteMany();
+  await prisma.integration.deleteMany();
+  await prisma.hubSetting.deleteMany();
+  await prisma.hubSettingChange.deleteMany();
+  await prisma.appError.deleteMany();
   await prisma.dayCheckReply.deleteMany();
   await prisma.dayCheck.deleteMany();
   await prisma.signIn.deleteMany();
