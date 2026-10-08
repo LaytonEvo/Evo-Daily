@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Role } from "@prisma/client";
-import { CalendarCheck, LayoutGrid, Menu, MessageSquare, Repeat, Users, X } from "lucide-react";
+import { Activity, CalendarCheck, LayoutGrid, Menu, MessageSquare, Repeat, Users, X } from "lucide-react";
+import { hubNavFor } from "@/lib/hub";
 import { SignOutButton } from "./sign-out-button";
 import { ThemeToggle } from "./theme-toggle";
 import type { SessionUser } from "@/lib/guards";
@@ -41,6 +42,8 @@ const ADMIN_NAV: NavItem[] = [
  * two links are worth a sidebar when one of them carries a count somebody is
  * waiting on.
  */
+const HUB_ICONS: Record<string, typeof LayoutGrid> = { activity: Activity };
+
 const MEMBER_NAV: NavItem[] = [
   { href: "/my-day", label: "My day", key: "my-day", icon: CalendarCheck },
   MESSAGES,
@@ -61,7 +64,11 @@ export function AppShell({
   title?: string;
   children: React.ReactNode;
 }) {
-  const nav = user.role === Role.ADMIN ? ADMIN_NAV : MEMBER_NAV;
+  // Tasks first, then whichever hub modules this person can open.
+  const nav = [
+    ...(user.role === Role.ADMIN ? ADMIN_NAV : MEMBER_NAV),
+    ...hubNavFor(user).map((m) => ({ href: m.href, label: m.label, key: m.key, icon: HUB_ICONS[m.key] ?? LayoutGrid })),
+  ];
   const [open, setOpen] = useState(false);
   const unread = useUnreadCount();
 

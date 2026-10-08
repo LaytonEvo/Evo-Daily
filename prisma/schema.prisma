@@ -72,12 +72,19 @@ model User {
    * a password and nothing at all about whether they have opened it since.
    */
   lastActiveAt       DateTime?
+  /// Hub modules granted on top of the role, e.g. ["finance"] or ["reporting"].
+  moduleAccess       String[]  @default([])
+  /// Sessions issued before this moment are refused. Set by an admin's force
+  /// sign-out; a JWT can't be recalled, so the guard compares against it.
+  sessionsRevokedAt  DateTime?
 
   @@index([organisationId, isActive])
 }
 
 enum Role {
   ADMIN
+  /// Hub manager: a member's own day, plus the modules they're granted.
+  MANAGER
   MEMBER
 }
 
@@ -124,6 +131,11 @@ model TaskTemplate {
   // no warning at all, which is right for a daily task and wrong for a monthly
   // one that lands at midnight and is missed by the next.
   leadDays       Int?
+  /// Set when another hub module raised this task through createTask(), e.g.
+  /// "finance". Null for tasks people set up themselves.
+  sourceModule   String?
+  /// The item in that module the task is about: an id, or a path to link to.
+  sourceRef      String?
   createdById    String
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -137,6 +149,7 @@ model TaskTemplate {
 
   @@index([organisationId, isActive])
   @@index([assigneeId])
+  @@index([sourceModule, sourceRef])
 }
 
 enum Frequency {
@@ -464,4 +477,33 @@ model DayCheckRead {
 
   @@id([userId, dayCheckId])
   @@index([userId])
+}
+
+enum JobRunStatus {
+  RUNNING
+  SUCCESS
+  WARNING
+  FAILED
+}
+
+/**
+ * The hub's activity log: one row per background job run, written at the start
+ * and finished at the end, success or failure. Organisation-wide rather than
+ * per organisation, because a job run covers every organisation at once.
+ */
+model JobRun {
+  id         String       @id @default(cuid())
+  module     String
+  jobName    String       @map("job_name")
+  trigger    String // "schedule", "manual" or "test"
+  status     JobRunStatus @default(RUNNING)
+  message    String?
+  details    Json?
+  startedAt  DateTime     @default(now()) @map("started_at")
+  finishedAt DateTime?    @map("finished_at")
+
+  @@index([jobName, startedAt])
+  @@index([module, startedAt])
+  @@index([status, startedAt])
+  @@map("activity_log")
 }

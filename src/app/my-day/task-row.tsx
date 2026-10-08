@@ -1,5 +1,6 @@
 "use client";
 
+import { moduleLabel } from "@/lib/hub";
 import { useState } from "react";
 import { InstanceStatus } from "@prisma/client";
 import { Check, ChevronDown, Clock, Star, StickyNote } from "lucide-react";
@@ -120,6 +121,17 @@ export function TaskRow({
                     style={{ backgroundColor: task.categoryColour ?? "hsl(var(--muted-foreground))" }}
                   />
                   {task.categoryName}
+                </span>
+              ) : null}
+              {task.sourceModule ? (
+                <span className="inline-flex items-center gap-1 rounded bg-accent px-1.5 py-px font-medium text-accent-foreground">
+                  {task.sourceHref ? (
+                    <a href={task.sourceHref} className="hover:underline">
+                      {moduleLabel(task.sourceModule)}
+                    </a>
+                  ) : (
+                    moduleLabel(task.sourceModule)
+                  )}
                 </span>
               ) : null}
               {task.dueTimeLabel ? (

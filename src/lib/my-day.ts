@@ -8,6 +8,7 @@
 
 import { Frequency, InstanceStatus, Role, type PrismaClient } from "@prisma/client";
 import { generateInstances } from "./recurrence";
+import { sourceHref } from "./hub";
 import { getSettings } from "./settings";
 import { daysLate } from "./instances";
 import { leadDaysFor } from "./lead-time";
@@ -48,6 +49,9 @@ export type MyDayTask = {
   withinLead?: boolean;
   /** Whether this member may still tick or untick it themselves. */
   editable: boolean;
+  /** The hub module that raised it, if one did, and where to look at the cause. */
+  sourceModule: string | null;
+  sourceHref: string | null;
 };
 
 export type MyDay = {
@@ -123,7 +127,7 @@ export async function getMyDay(
       // isStarred is read live rather than frozen onto the instance: starring
       // is a statement about what matters now, so it has to reach today's list.
       template: {
-        select: { description: true, isStarred: true, frequency: true, leadDays: true },
+        select: { description: true, isStarred: true, frequency: true, leadDays: true, sourceModule: true, sourceRef: true },
       },
     },
     orderBy: [{ dueDate: "asc" }, { dueAt: "asc" }, { title: "asc" }],
@@ -181,6 +185,8 @@ type InstanceRow = {
     isStarred: boolean;
     frequency: Frequency;
     leadDays: number | null;
+    sourceModule: string | null;
+    sourceRef: string | null;
   };
 };
 
@@ -213,7 +219,7 @@ export async function getComingUp(
     include: {
       category: { select: { name: true, colour: true } },
       template: {
-        select: { description: true, isStarred: true, frequency: true, leadDays: true },
+        select: { description: true, isStarred: true, frequency: true, leadDays: true, sourceModule: true, sourceRef: true },
       },
     },
     orderBy: [{ dueDate: "asc" }, { dueAt: "asc" }, { title: "asc" }],
@@ -273,6 +279,8 @@ function toTask(row: InstanceRow, today: DateOnly): MyDayTask {
     // MISSED instances never reach this screen, so anything here is inside
     // the grace window by construction.
     editable: row.status !== InstanceStatus.MISSED,
+    sourceModule: row.template.sourceModule,
+    sourceHref: sourceHref(row.template),
   };
 }
 
@@ -302,7 +310,7 @@ export async function getUpcomingDay(
     include: {
       category: { select: { name: true, colour: true } },
       template: {
-        select: { description: true, isStarred: true, frequency: true, leadDays: true },
+        select: { description: true, isStarred: true, frequency: true, leadDays: true, sourceModule: true, sourceRef: true },
       },
     },
     orderBy: [{ dueAt: "asc" }, { title: "asc" }],

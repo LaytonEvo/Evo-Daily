@@ -20,6 +20,7 @@ import {
   type DateOnly,
 } from "@/lib/time";
 import { generatePassword } from "@/lib/generate-password";
+import { GRANTABLE_MODULES, ROLE_LABELS, moduleLabel } from "@/lib/hub";
 
 type Person = {
   id: string;
@@ -30,6 +31,7 @@ type Person = {
   slackUserId: string | null;
   managerId: string | null;
   mustChangePassword: boolean;
+  moduleAccess: string[];
   activeTasks: number;
   /** ISO instant of the last successful sign-in, or null for never. */
   lastSeen: string | null;
@@ -147,8 +149,13 @@ export function UsersScreen({
                     <td className="hidden px-2 py-2.5 sm:px-3 text-muted-foreground md:table-cell">{person.email}</td>
                     <td className="px-2 py-2.5 sm:px-3">
                       <Badge variant={person.role === Role.ADMIN ? "default" : "muted"}>
-                        {person.role === Role.ADMIN ? "Admin" : "Member"}
+                        {ROLE_LABELS[person.role]}
                       </Badge>
+                      {person.role !== Role.ADMIN && person.moduleAccess.length > 0 ? (
+                        <span className="ml-1 hidden text-xs text-muted-foreground lg:inline">
+                          + {person.moduleAccess.map(moduleLabel).join(", ")}
+                        </span>
+                      ) : null}
                     </td>
                     <td className="hidden px-2 py-2.5 sm:px-3 text-right tabular-nums sm:table-cell">
                       {person.activeTasks}
@@ -258,6 +265,7 @@ function PersonDrawer({
   const [isActive, setIsActive] = useState(person?.isActive ?? true);
   const [slackUserId, setSlackUserId] = useState(person?.slackUserId ?? "");
   const [managerId, setManagerId] = useState(person?.managerId ?? "");
+  const [moduleAccess, setModuleAccess] = useState<string[]>(person?.moduleAccess ?? []);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -277,6 +285,7 @@ function PersonDrawer({
           isActive,
           slackUserId: slackUserId || null,
           managerId: managerId || null,
+          moduleAccess,
           ...(password ? { password } : {}),
         },
         password ? "Saved. They will set a new password at next sign-in." : "Saved.",
@@ -296,6 +305,7 @@ function PersonDrawer({
         role,
         slackUserId: slackUserId || null,
         managerId: managerId || null,
+        moduleAccess,
       }),
     });
 
@@ -425,9 +435,39 @@ function PersonDrawer({
                 onChange={(e) => setRole(e.target.value as Role)}
               >
                 <option value={Role.MEMBER}>Member — their own tasks only</option>
+                <option value={Role.MANAGER}>Manager — their own tasks, plus modules below</option>
                 <option value={Role.ADMIN}>Admin — everything</option>
               </Select>
             </div>
+
+            {role !== Role.ADMIN ? (
+              <fieldset className="flex flex-col gap-1.5">
+                <legend className="mb-1.5 text-sm font-medium">
+                  Hub modules
+                  <span className="ml-1 font-normal text-muted-foreground">optional</span>
+                </legend>
+                <div className="flex flex-wrap gap-x-4 gap-y-2">
+                  {GRANTABLE_MODULES.map((m) => (
+                    <label key={m} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={moduleAccess.includes(m)}
+                        onChange={(e) =>
+                          setModuleAccess((current) =>
+                            e.target.checked ? [...current, m] : current.filter((x) => x !== m),
+                          )
+                        }
+                      />
+                      {moduleLabel(m)}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  What they can open besides their own day. Admins see everything.
+                </p>
+              </fieldset>
+            ) : null}
 
             <div className="flex flex-col gap-1.5">
               <label htmlFor="manager" className="text-sm font-medium">
@@ -478,6 +518,26 @@ function PersonDrawer({
                   </span>
                 ) : null}
               </label>
+            ) : null}
+
+            {person && !isSelf && person.isActive ? (
+              <div className="flex flex-col gap-1.5 border-t pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={pending}
+                  onClick={async () => {
+                    setPending(true);
+                    await onPatch(person.id, { signOutEverywhere: true }, `${person.name} has been signed out everywhere.`);
+                    setPending(false);
+                  }}
+                >
+                  Sign out everywhere
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Ends their sessions on every device now. They can sign straight back in.
+                </p>
+              </div>
             ) : null}
 
             {error ? (

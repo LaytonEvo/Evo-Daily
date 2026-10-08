@@ -6,6 +6,10 @@ import { Role, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { hashPassword, MIN_PASSWORD_LENGTH } from "./password";
 import { ApiError } from "./errors";
+import { GRANTABLE_MODULES } from "./hub";
+
+/** Hub modules granted on top of the role. Admins see everything regardless. */
+const moduleAccessSchema = z.array(z.enum(GRANTABLE_MODULES)).transform((m) => [...new Set(m)]);
 
 export const createUserSchema = z.object({
   name: z.string().trim().min(1, "Give them a name").max(120),
@@ -14,6 +18,7 @@ export const createUserSchema = z.object({
   role: z.nativeEnum(Role).default(Role.MEMBER),
   slackUserId: z.string().trim().max(64).nullish(),
   managerId: z.string().nullish(),
+  moduleAccess: moduleAccessSchema.optional(),
 });
 
 export const updateUserSchema = z.object({
@@ -24,6 +29,9 @@ export const updateUserSchema = z.object({
   managerId: z.string().nullish(),
   /** Set by an admin; the user is then forced to change it on next sign-in. */
   password: z.string().min(MIN_PASSWORD_LENGTH).optional(),
+  moduleAccess: moduleAccessSchema.optional(),
+  /** End every session they have open, on every device, now. */
+  signOutEverywhere: z.literal(true).optional(),
 });
 
 /**
@@ -99,6 +107,7 @@ export async function createUser(
       role: input.role,
       slackUserId: input.slackUserId || null,
       managerId: input.managerId || null,
+      moduleAccess: input.moduleAccess ?? [],
       mustChangePassword: true,
     },
   });
@@ -123,6 +132,9 @@ export async function updateUser(
     if (input.role && input.role !== Role.ADMIN) {
       throw new ApiError("You cannot remove your own admin access", 400);
     }
+    if (input.signOutEverywhere) {
+      throw new ApiError("Use Sign out to end your own session", 400);
+    }
   }
 
   if (input.managerId) {
@@ -137,9 +149,13 @@ export async function updateUser(
       ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
       ...(input.slackUserId !== undefined ? { slackUserId: input.slackUserId || null } : {}),
       ...(input.managerId !== undefined ? { managerId: input.managerId || null } : {}),
+      ...(input.moduleAccess !== undefined ? { moduleAccess: [...new Set(input.moduleAccess)] } : {}),
       ...(input.password
         ? { passwordHash: await hashPassword(input.password), mustChangePassword: true }
         : {}),
+      // Deactivating ends their sessions too, so reactivating later doesn't
+      // quietly revive a cookie from before.
+      ...(input.signOutEverywhere || input.isActive === false ? { sessionsRevokedAt: new Date() } : {}),
     },
   });
 }

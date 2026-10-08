@@ -11,6 +11,30 @@ timelines, time tracking, custom fields, sprints, nested folders, or any status
 beyond the three below. These are what killed adoption of the previous tool. Do
 not add them, and do not add "just in case" configuration options.
 
+## Evo Ops Hub
+
+EvoTasks is the foundation of the **Evo Ops Hub**: one app for Evolution Golf
+operations, with email, TikTok, finance/AP and reporting plugging in as
+modules around Tasks over the coming phases. The spec is
+[docs/hub/evo-ops-hub-spec.md](docs/hub/evo-ops-hub-spec.md); progress is in
+[docs/hub/phase-1-report.md](docs/hub/phase-1-report.md).
+
+What the hub adds to Tasks so far:
+
+- **Google sign-in** for anyone in the company Workspace who already has an
+  account. Passwords still work.
+- **Sessions end after 12 hours idle**, and admins can sign someone out
+  everywhere from People.
+- **A Manager role and per-person module access**, so "Katy: Finance only" is a
+  Manager with Finance ticked. Inside Tasks a Manager is treated as a Member.
+- **The task hook**, `createTask()` in `src/lib/create-task.ts`: the one way a
+  module raises work for a person. The task carries its module and a link back
+  to the item that raised it, and raising the same open item twice returns
+  the existing task.
+- **The activity log**: every scheduled job run, success or failure, on the
+  Activity page with a "Run now" button. Jobs are listed in
+  `src/lib/job-registry.ts` with their schedule and what a good run looks like.
+
 ---
 
 ## Running it locally
@@ -134,6 +158,14 @@ particular time. See the note at the top of `cron.sh`.
 | `SLACK_BOT_TOKEN` | no | Phase 3. Without it the app runs unchanged and every nudge reports itself skipped |
 | `SLACK_MANAGER_CHANNEL_ID` | no | Phase 3, for the Monday digest |
 | `SEED_DEFAULT_PASSWORD` | no | Only read by the seed script |
+| `AUTH_GOOGLE_ID` | no | Google OAuth client ID. With the secret, adds "Sign in with Google" |
+| `AUTH_GOOGLE_SECRET` | no | Google OAuth client secret |
+| `ALLOWED_GOOGLE_DOMAIN` | no | Workspace domain for Google sign-in. Defaults to `evolutiongolf.co.uk` |
+
+To switch Google sign-in on, create an OAuth client in a Google Cloud project
+owned by the Evolution Golf Workspace. Make the consent screen **Internal**, add
+`<NEXTAUTH_URL>/api/auth/callback/google` as a redirect URI, and set the two
+variables above. Only accounts that already exist in People can sign in with it.
 
 The cron services need `APP_URL`, `CRON_SECRET` and `JOB` instead.
 
@@ -214,6 +246,13 @@ alerts ran nightly at first, which meant one bad week for one person sent their
 manager the same message seven times — a rolling seven-day window only needs
 reading once a week.
 
+Every run, scheduled or from the Activity page's "Run now", is written to the
+activity log (`activity_log`) with its status, duration and outcome. Each job
+checks its own result: `generate` warns if any active template due today still
+has no task, and the Slack jobs warn if a message failed to send. Admins and
+anyone granted Activity see a one-line warning on My day when a run failed or
+warned in the last 24 hours.
+
 Every job requires `x-cron-secret` and answers 401 without it. Belt and braces:
 `/my-day` also calls `ensureInstancesForToday()` on load, so a failed cron or a
 sleeping Railway service never costs anyone a day's tasks. That is safe
@@ -247,9 +286,12 @@ should be automated.
 
 ### Roles
 
-Two, and only two. `ADMIN` can do everything, including their own task screen.
-`MEMBER` sees and completes their own tasks and nothing else. There is no
-permissions matrix and there should not be one.
+`ADMIN` can do everything, including their own task screen. `MEMBER` sees and
+completes their own tasks and nothing else. `MANAGER` is the hub's third role:
+inside Tasks it is exactly a member, and it exists to carry module access (and,
+from Phase 2, approvals in those modules). Module access is a list of names on
+the user, granted on the People screen; admins have every module regardless.
+Every Tasks check is still `role === ADMIN`, and there is no permissions matrix.
 
 ### Multi-tenancy
 

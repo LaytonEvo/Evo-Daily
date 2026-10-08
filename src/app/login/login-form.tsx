@@ -6,11 +6,17 @@ import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-export function LoginForm() {
+export function LoginForm({
+  googleEnabled = false,
+  initialError = null,
+}: {
+  googleEnabled?: boolean;
+  initialError?: string | null;
+}) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [pending, setPending] = useState(false);
 
   async function onSubmit(event: React.FormEvent) {
@@ -33,6 +39,24 @@ export function LoginForm() {
   }
 
   return (
+    <div className="flex flex-col gap-6">
+      {googleEnabled ? (
+        <>
+          <Button
+            type="button"
+            size="lg"
+            variant="outline"
+            onClick={() => signIn("google", { redirectTo: "/my-day" })}
+          >
+            Sign in with Google
+          </Button>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            or with your password
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        </>
+      ) : null}
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <label htmlFor="email" className="text-sm font-medium">
@@ -76,5 +100,6 @@ export function LoginForm() {
         {pending ? "Signing in…" : "Sign in"}
       </Button>
     </form>
+    </div>
   );
 }
