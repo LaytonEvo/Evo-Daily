@@ -29,6 +29,7 @@ model Organisation {
   attachments Attachment[]
   signIns     SignIn[]
   dayChecks   DayCheck[]
+  apiTokens   ApiToken[]
 }
 
 model User {
@@ -64,6 +65,8 @@ model User {
   commentReads       CommentRead[]
   activity           DailyActivity[]
   dayChecks          DayCheck[]
+  apiTokens          ApiToken[]
+  relayedComments    Comment[]       @relation("CommentOnBehalfOf")
   dayCheckReplies    DayCheckReply[]
   dayCheckReads      DayCheckRead[]
   /**
@@ -282,6 +285,14 @@ model Comment {
   organisationId String
   instanceId     String
   authorId       String
+  /**
+   * Whose words these are, when the author is not the one who wrote them.
+   * Set when an agent posts a reply somebody dictated. The author stays the
+   * agent, because the agent is what typed it; this says who it came from, so
+   * the thread can read "Layton (via Claude)" rather than pick one of the two
+   * and be wrong about the other.
+   */
+  onBehalfOfId   String?
   body           String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -289,6 +300,7 @@ model Comment {
   organisation Organisation @relation(fields: [organisationId], references: [id])
   instance     TaskInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
   author       User         @relation(fields: [authorId], references: [id])
+  onBehalfOf   User?        @relation("CommentOnBehalfOf", fields: [onBehalfOfId], references: [id])
   attachments  Attachment[]
 
   @@index([instanceId, createdAt])
@@ -464,4 +476,33 @@ model DayCheckRead {
 
   @@id([userId, dayCheckId])
   @@index([userId])
+}
+
+/**
+ * A key that lets a machine act in this organisation.
+ * Hashed, never stored in the clear: a token readable from the database is a
+ * token readable by anybody who gets a backup. It carries a user, so every
+ * action it takes is attributed to somebody by name rather than appearing from
+ * nowhere — the whole point of this app is a record you can argue from.
+ */
+model ApiToken {
+  id             String    @id @default(cuid())
+  organisationId String
+  userId         String
+  /**
+   * What it is for, in words: "Claude".
+   */
+  name           String
+  tokenHash      String    @unique
+  createdAt      DateTime  @default(now())
+  lastUsedAt     DateTime?
+  /**
+   * Set to disable it without losing the record that it existed.
+   */
+  revokedAt      DateTime?
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId])
 }

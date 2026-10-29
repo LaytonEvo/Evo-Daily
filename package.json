@@ -22,6 +22,7 @@
     "db:clear-demo": "tsx prisma/clear-demo.ts",
     "db:realign-today": "tsx prisma/realign-today.ts",
     "db:send-nudge": "tsx prisma/send-nudge.ts",
+    "db:mint-token": "tsx prisma/mint-token.ts",
     "postinstall": "prisma generate",
     "test:db": "prisma migrate deploy && vitest run"
   },

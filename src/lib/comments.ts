@@ -78,6 +78,15 @@ export async function addComment(
   instanceId: string,
   actor: Actor,
   body: string,
+  /**
+   * Whose words these are, when the actor is only carrying them.
+   *
+   * An agent relaying a reply somebody dictated posts as itself and names
+   * them here. Writing it under their name would be a machine wearing a
+   * person's face; writing it under the agent's alone would put their words
+   * in the bot's mouth. Both are wrong in a thread people argue from.
+   */
+  onBehalfOfId?: string,
 ) {
   const instance = await instanceFor(db, instanceId, actor);
 
@@ -92,6 +101,7 @@ export async function addComment(
       organisationId: instance.organisationId,
       instanceId: instance.id,
       authorId: actor.id,
+      onBehalfOfId: onBehalfOfId ?? null,
       body: text,
     },
   });

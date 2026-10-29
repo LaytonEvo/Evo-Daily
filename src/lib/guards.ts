@@ -12,6 +12,7 @@ import { auth } from "./auth";
 import { prisma } from "./db";
 import { ApiError } from "./errors";
 import { recordActivity } from "./activity";
+import { bearerFrom, identify, touch } from "./api-tokens";
 import type { Actor } from "./instances";
 
 export { ApiError };
@@ -154,4 +155,41 @@ function statusOf(error: unknown): number | null {
   const status = (error as Error & { status?: unknown }).status;
   if (typeof status !== "number" || status < 400 || status > 599) return null;
   return status;
+}
+
+/**
+ * The agent behind a bearer token, for the machine-facing API.
+ *
+ * Deliberately separate from the session guards rather than folded into them.
+ * A token is a different kind of caller to a person at a screen: it never gets
+ * a redirect, it is never "signed in", and the routes it may reach are a
+ * smaller set chosen on purpose. Sharing one guard between the two is how the
+ * smaller set quietly becomes the larger one.
+ */
+export async function requireAgent(request: Request): Promise<SessionUser & { tokenName: string }> {
+  const identity = await identify(prisma, bearerFrom(request));
+  if (!identity) throw new ApiError("Not a known token", 401);
+
+  // Admin-equivalent for now, because reading the whole team's work and
+  // writing a task off are both admin things. Named here rather than assumed,
+  // so narrowing it later is a change to one line.
+  if (identity.role !== Role.ADMIN) {
+    throw new ApiError("This token is not an admin", 403);
+  }
+
+  await touch(prisma, identity.tokenId);
+
+  const record = await prisma.user.findUniqueOrThrow({
+    where: { id: identity.userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      organisationId: true,
+      mustChangePassword: true,
+    },
+  });
+
+  return { ...record, tokenName: identity.name };
 }
